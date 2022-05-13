@@ -1,0 +1,32 @@
+Package: PTBoxProxytools
+Type: Package
+Title: PTBox proxy tools for time series processing and analysis
+Version: 0.1.1
+Date: 2022-04-28
+Authors@R: c(
+    person("Nils", "Weitzel", email = "nweitzel@iup.uni-heidelberg.de", role = c("aut", "cre")),
+    person("Beatrice", "Ellerhoff", email = "beatrice.ellerhoff@iup.uni-heidelberg.de", role = "aut"),
+    person("Moritz", "Adam", email = "madam@iup.uni-heidelberg.de", role = "aut")
+    )
+Description: Provides tools and helpers for processing and analyzing (paleo) time series data as part of the PaleoToolBox (PTBox)
+License: All rights reserved
+Depends: R (>= 3.6.0)
+Imports:
+    magrittr,
+    rlang,
+    dplyr (>= 1.0.1),
+    tidyr,
+    purrr,
+    tibble,
+    zoo,
+    VGAM
+Suggests:
+    princurve,
+    vegan,
+    bestNormalize
+Remotes:
+    github::krehfeld/nest@master,
+    github::EarthSystemDiagnostics/paleospec@master
+VignetteBuilder: knitr
+RoxygenNote: 7.1.2
+Encoding: UTF-8

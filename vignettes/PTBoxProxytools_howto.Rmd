@@ -1,0 +1,130 @@
+---
+title: "Tutorial on the PTBoxProxytools package"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+      toc: true
+      toc_depth: 3
+      fig_width: 6 
+      fig_height: 4 
+vignette: >
+  %\VignetteIndexEntry{Tutorial on the PTBoxProxytools package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Applications of package functions to example data
+
+### Loading requirements
+
+```{r}
+library(PTBoxProxytools) # loads PTBoxProxydata dependency
+library(PTBoxProxydata) # remove for public
+library(magrittr) # for the %>% operator
+```
+
+
+### Applying functions to different `PTBoxProxydata` time series objects
+
+First, we create a ProxyDataManager instance and load the `icecore_testset` built into PTBoxProxydata as data for testing the PTBoxProxytools functions. This outputs a `PTBoxProxydata::Proxytibble` object. This will be used to explain how to apply the package functions to it.
+
+```{r}
+mng <- ProxyDataManager()
+
+icecore_data <- load_set(mng, dataset_names = 'icecore_testset', zoo_format = 'zoo')
+
+print(class(icecore_data))
+```
+
+> Please find also the `vignette("PTBoxProxydata_howto")` in the `PTBoxProxydata` package for an introduction to the data objects provided by `PTBoxProxydata`. 
+
+In a second step, we explore the basic usage for `PTBoxProxytools` functions that operate on proxy data. Therefore, we apply `PTBoxProxytools::paleodata_windowing` as an exemplary function to an individual time series (`zoo::zoo`) 
+```{r}
+# 1. example: apply `Proxytools` function (here `paleodata_windowing`)
+# to an individual `zoo::zoo`
+testout <- icecore_data$proxy_data[[1]] %>% 
+  paleodata_windowing(.,4000,6000)
+plot(testout)
+```
+
+and to all time series stored in a Proxytibble (`PTBoxProxydata::Proxytibble`).
+```{r}
+# 2. example: apply function or to all `zoo::zoo`s/`PTBoxProxydata::Proxyzoo`s
+# contained in a `PTBoxProxydata::Proxytibble`
+testout <- icecore_data %>% 
+  paleodata_windowing(.,4000,6000)
+print(testout)
+```
+
+### Some useful examples of `PTBoxProxytools` functions
+
+#### 1. Normalization to center and rescale irregular time series 
+```{r}
+# normalization
+testout <- icecore_data$proxy_data[[1]] %>% 
+  normalize()
+head(testout,3)
+```
+
+#### 2. Interpolation for irregular time series
+```{r}
+# interpolation
+# internally uses PTBoxProxydata::zoo_apply
+some_window <- icecore_data$proxy_data[[1]] %>% 
+  zoo::index() %>%
+  .[c(1,length(.))]
+outtimes <- seq(some_window[1], some_window[2], length.out = 20)
+testout <- icecore_data$proxy_data[[1]] %>% 
+  paleodata_interpolation(., "spectral", outtimes)
+head(testout,3)
+print(dim(testout)[1])
+# output is still a zoo
+print(class(testout))
+```
+#### 3. Gaussian filtering of irregular time series
+```{r}
+# Detrend ice core data with 10kyr cutoff timescale
+icecoredata_detrended <- paleodata_filtering(icecore_data, 'detrend', detr_scale=10000)
+# Smooth the data with 10kyr cutoff timescale
+icecoredata_smoothed <- paleodata_filtering(icecore_data, 'smooth', smooth_scale=10000)
+# Apply bandpass filter for timescales from 1kyr to 10kyr
+icecoredata_filtered <- paleodata_filtering(icecore_data, 'bandpass', filter_scales=data.frame(lower=1000,upper=10000))
+# Plot results
+#plot(icecoredata_detrended$proxy_data[[1]])
+#plot(icecoredata_smoothed$proxy_data[[1]])
+plot(icecoredata_filtered$proxy_data[[1]]) #we show only one example plot
+```
+
+
+#### 4. Spectral analysis
+First, we compute and plot the spectrum. 
+```{r}
+testout <- icecore_data$proxy_data[[1]] %>% 
+  paleodata_spectrum(.)
+
+library(PaleoSpec)
+PaleoSpec::LPlot(testout$d18O$raw, col="grey")
+PaleoSpec::LLines(testout$d18O$logsmooth, col="darkblue")
+```
+
+Second, we compute the variance on timescales of 200 to 2000 years, which is stored in the `proxy_data` column. 
+```{r}
+testout <- icecore_data %>% 
+  paleodata_varfromspec(.,  target="raw", freq.start = 5e-4, freq.end = 5e-3)
+head(testout$proxy_data)
+```
+
+Third, we fit a power-law scaling to the spectrum on timescales of 2000 to 20000 years, which is stored again in `proxy_data`.
+```{r}
+testout <- icecore_data %>% 
+  paleodata_scaling(.,  target="raw", freq.start = 5e-5, freq.end = 5e-4)
+head(testout,3)
+```
+
