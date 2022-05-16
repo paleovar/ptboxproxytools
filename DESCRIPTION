@@ -26,7 +26,8 @@ Suggests:
     bestNormalize
 Remotes:
     github::krehfeld/nest@master,
-    github::EarthSystemDiagnostics/paleospec@master
+    github::EarthSystemDiagnostics/paleospec@master,
+    github::paleovar/ptboxproxydata@master
 VignetteBuilder: knitr
 RoxygenNote: 7.1.2
 Encoding: UTF-8
