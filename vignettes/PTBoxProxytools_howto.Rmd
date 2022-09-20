@@ -99,31 +99,32 @@ icecoredata_filtered <- paleodata_filtering(icecore_data, 'bandpass', filter_sca
 #plot(icecoredata_detrended$proxy_data[[1]])
 #plot(icecoredata_smoothed$proxy_data[[1]])
 plot(icecoredata_filtered$proxy_data[[1]]) #we show only one example plot
+plot(icecoredata_filtered$proxy_data[[2]]) #we show only one example plot
 ```
 
 
 #### 4. Spectral analysis
 First, we compute and plot the spectrum. 
 ```{r test paleodata_spectrum}
-testout <- icecore_data$proxy_data[[1]] %>% 
+testout <- icecore_data$proxy_data[[1]] %>%
   paleodata_spectrum(.)
 
 library(PaleoSpec)
-PaleoSpec::LPlot(testout$d18O$raw, col="grey")
-PaleoSpec::LLines(testout$d18O$logsmooth, col="darkblue")
+PaleoSpec::LPlot(testout$EDCBag_18O$raw, col="grey")
+PaleoSpec::LLines(testout$EDCBag_18O$logsmooth, col="darkblue")
 ```
 
 Second, we compute the variance on timescales of 200 to 2000 years, which is stored in the `proxy_data` column. 
 ```{r test paleodata_varfromspec}
-testout <- icecore_data %>% 
+testout <- icecore_data %>%
   paleodata_varfromspec(.,  target="raw", freq.start = 5e-4, freq.end = 5e-3)
 head(testout$proxy_data)
 ```
 
 Third, we fit a power-law scaling to the spectrum on timescales of 2000 to 20000 years, which is stored again in `proxy_data`.
 ```{r test paleodata_scaling}
-testout <- icecore_data %>% 
+testout <- icecore_data %>%
   paleodata_scaling(.,  target="raw", freq.start = 5e-5, freq.end = 5e-4)
-head(testout,3)
+head(testout$proxy_data,3)
 ```
 
