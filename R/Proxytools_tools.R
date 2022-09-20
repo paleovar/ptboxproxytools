@@ -43,7 +43,7 @@ paleodata_windowing.Proxytibble <-
         if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
             stop("`paleodata_windowing` only implemented for `zoo_format == 'zoo'`")
         return(
-            apply_proxy(
+            PTBoxProxydata::apply_proxy(
                 xin,
                 fun = paleodata_windowing.zoo,
                 start_date = start_date,
@@ -146,7 +146,7 @@ paleodata_interpolation.Proxytibble <-
         if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
             stop("`paleodata_interpolation` only implemented for `zoo_format == 'zoo'`")
         return(
-            apply_proxy(
+            PTBoxProxydata::apply_proxy(
                 xin,
                 fun = paleodata_interpolation.zoo,
                 interpolation_type = interpolation_type,
@@ -236,7 +236,7 @@ paleodata_filtering.Proxytibble <-
         if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
             stop("`paleodata_filtering` only implemented for `zoo_format == 'zoo'`")
         return(
-            apply_proxy(
+            PTBoxProxydata::apply_proxy(
                 xin,
                 fun = paleodata_filtering.zoo,
                 filter_type = filter_type,
@@ -381,7 +381,7 @@ paleodata_transformation.Proxytibble <-
         if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
             stop("`paleodata_transformation` only implemented for `zoo_format == 'zoo'`")
         return(
-            apply_proxy(xin,
+            PTBoxProxydata::apply_proxy(xin,
                         fun = paleodata_transformation.zoo,
                         transformation_type = transformation_type)
         )
@@ -457,7 +457,7 @@ paleodata_signal_extraction.Proxytibble <- function(xin,signal_type,signal_compo
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`paleodata_signal_extraction` only implemented for `zoo_format == 'zoo'`")
     return(
-        apply_proxy(xin,
+        PTBoxProxydata::apply_proxy(xin,
                     fun = paleodata_signal_extraction.zoo,
                     signal_type = signal_type,
                     signal_components = signal_components)
@@ -571,7 +571,7 @@ paleodata_varfromspec.Proxytibble <- function(xin,
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`paleodata_varfromspec` only implemented for `zoo_format == 'zoo'`")
     return(
-        apply_proxy(
+        PTBoxProxydata::apply_proxy(
             xin,
             freq.start = freq.start,
             freq.end = freq.end,
@@ -666,7 +666,7 @@ paleodata_scaling.Proxytibble <- function(xin,
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`paleodata_spectrum` only implemented for `zoo_format == 'zoo'`")
     return(
-        apply_proxy(
+        PTBoxProxydata::apply_proxy(
             xin,
             freq.start = freq.start,
             freq.end = freq.end,
@@ -773,7 +773,7 @@ paleodata_spectrum.Proxytibble <- function(xin,
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`paleodata_spectrum` only implemented for `zoo_format == 'zoo'`")
     return(
-        apply_proxy(
+        PTBoxProxydata::apply_proxy(
             xin,
             fun = paleodata_spectrum.zoo,
             interpolation = interpolation,
@@ -862,7 +862,7 @@ paleodata_explained_variance.Proxytibble <- function(xin,signal_type="pca",signa
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`paleodata_explained_variance` only implemented for `zoo_format == 'zoo'`")
     return(
-        apply_proxy(
+        PTBoxProxydata::apply_proxy(
             xin,
             fun = paleodata_explained_variance.zoo,
             signal_type=signal_type,
@@ -941,7 +941,7 @@ find_max_window.Proxytibble <- function(xin,t_min=min(zoo::index(xin)),t_max=max
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`find_max_window` only implemented for `zoo_format == 'zoo'`")
     return(
-        apply_proxy(
+        PTBoxProxydata::apply_proxy(
             xin,
             fun = find_max_window.zoo,
             t_min=t_min,
@@ -1075,7 +1075,7 @@ paleodata_processing.Proxytibble <- function(xin,
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`paleodata_processing` only implemented for `zoo_format == 'zoo'`")
     return(
-        apply_proxy(
+        PTBoxProxydata::apply_proxy(
             xin,
             fun = paleodata_processing.zoo,
             filtering = filtering,

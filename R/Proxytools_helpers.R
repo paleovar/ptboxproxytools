@@ -36,7 +36,7 @@ rev_time_axis.zoo <- function(xin) {
 rev_time_axis.Proxytibble <- function(xin) {
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`rev_time_axis` only implemented for `zoo_format == 'zoo'`")
-    return(apply_proxy(xin, fun = rev_time_axis.zoo))
+    return(PTBoxProxydata::apply_proxy(xin, fun = rev_time_axis.zoo))
 }
 
 
@@ -83,7 +83,7 @@ clean_timeseries.zoo <-function(xin,remove_na=TRUE,aggregation=TRUE,aggregation_
 clean_timeseries.Proxytibble <- function(xin,remove_na=TRUE,aggregation=TRUE,aggregation_fun=mean) {
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`clean_timeseries` only implemented for `zoo_format == 'zoo'`")
-    return(apply_proxy(xin, fun = clean_timeseries.zoo,remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+    return(PTBoxProxydata::apply_proxy(xin, fun = clean_timeseries.zoo,remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
 }
 
 
@@ -152,7 +152,7 @@ normalize.Proxyzoo <- function(xin, center = TRUE, scale = TRUE) {
 normalize.Proxytibble <- function(xin, center = TRUE, scale = TRUE) {
     if (!any(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) %in% c('zoo', 'Proxyzoo')))
         stop("`normalize` only implemented for `zoo_format == 'zoo'`")
-    return(apply_proxy(
+    return(PTBoxProxydata::apply_proxy(
         xin,
         fun = normalize, #.zoo,
         center = center,
@@ -249,7 +249,7 @@ rep_zoo.zoo <- function(xin,times=1) {
 rep_zoo.Proxytibble <- function(xin,times = 1) {
     if (all(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`rep_zoo` only implemented for `zoo_format == 'zoo'`")
-    return(apply_proxy(xin, fun = rep_zoo.zoo, times = times))
+    return(PTBoxProxydata::apply_proxy(xin, fun = rep_zoo.zoo, times = times))
 }
 
 

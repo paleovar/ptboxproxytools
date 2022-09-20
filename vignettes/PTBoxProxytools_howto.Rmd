@@ -38,7 +38,7 @@ First, we create a ProxyDataManager instance and load the `icecore_testset` buil
 ```{r}
 mng <- ProxyDataManager()
 
-icecore_data <- load_set(mng, dataset_names = 'icecore_testset', zoo_format = 'zoo')
+icecore_data <- load_set(mng, dataset_names = 'icecore_testset', zoo_format = 'zoo') %>% clean_timeseries(.)
 
 print(class(icecore_data))
 ```
