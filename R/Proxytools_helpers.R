@@ -71,7 +71,7 @@ clean_timeseries <- function(xin,remove_na=TRUE,aggregation=TRUE,aggregation_fun
 #' @export
 clean_timeseries.zoo <-function(xin,remove_na=TRUE,aggregation=TRUE,aggregation_fun=mean) {
     if (remove_na==TRUE) {
-        xin <- na.omit(xin)
+        xin <- zoo::as.zoo(na.omit(xin))
     }
     if (aggregation==TRUE) {
         xin <- zoo:::aggregate.zoo(xin,zoo::index(xin),aggregation_fun)
