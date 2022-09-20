@@ -102,9 +102,9 @@ paleodata_interpolation.zoo <-
                     order.by = interpolation_dates
                 )
                 colnames(xin) <- cln
-                return(xin)
+                return(clean_timeseries(xin))
             } else {
-                return(PTBoxProxydata::zoo_apply(xin,
+                return(clean_timeseries(PTBoxProxydata::zoo_apply(xin,
                                  function(xx) {
                                      xo <- zoo::zoo(
                                          PaleoSpec::MakeEquidistant(zoo::index(xx),
@@ -113,24 +113,24 @@ paleodata_interpolation.zoo <-
                                          order.by = interpolation_dates)
                                      return(xo)
                                  },
-                                 out_index = interpolation_dates))
+                                 out_index = interpolation_dates)))
             }
         }
         if (interpolation_type == "spline") {
             if (class(zoo::coredata(xin)) != "matrix") {
-                return(zoo::zoo(
+                return(clean_timeseries(zoo::zoo(
                     spline(zoo::index(xin),
                            xin,
                            xout = interpolation_dates)$y,
                     order.by = interpolation_dates
-                ))
+                )))
             } else {
-                return(PTBoxProxydata::zoo_apply(xin,
+                return(clean_timeseries(PTBoxProxydata::zoo_apply(xin,
                                  function(xx)
                                      spline(zoo::index(xx),
                                             xx,
                                             xout = interpolation_dates)$y,
-                                 out_index = interpolation_dates))
+                                 out_index = interpolation_dates)))
             }
         }
     }
@@ -372,7 +372,7 @@ paleodata_transformation.zoo <-
                     PTBoxProxydata::zoo_apply(xin, normalize, center = TRUE, scale = FALSE)
             }
         }
-        return(zoo::zoo(data_trafo, order.by = zoo::index(xin)))
+        return(clean_timeseries(zoo::zoo(data_trafo, order.by = zoo::index(xin))))
     }
 
 #' @export
@@ -738,15 +738,14 @@ paleodata_spectrum.zoo <-
                                   by = mean(diff(zoo::index(xin))))
             }
         if (interpolation == TRUE) {
-            xin <-
-                paleodata_interpolation(xin, interpolation_type, interpolation_dates)
+            xin <- paleodata_interpolation(xin, interpolation_type, interpolation_dates)
         }
         if (transformation == TRUE) {
             xin <- paleodata_transformation(xin, transformation_type)
         }
         if (class(zoo::coredata(xin)) != "matrix") {
             spectrum <- list()
-            spectrum$raw <- PaleoSpec::SpecMTM(as.ts(xin))
+            spectrum$raw <- PaleoSpec::SpecMTM(stats::as.ts(xin))
             spectrum$logsmooth <- PaleoSpec::LogSmooth(spectrum$raw)
             return(spectrum)
         } else {
@@ -754,7 +753,7 @@ paleodata_spectrum.zoo <-
                 apply(xin, 2, function(xx) {
                     spectrum <- list()
                     spectrum$raw <-
-                        PaleoSpec::SpecMTM(timeSeries::as.ts(zoo::zoo(xx, order.by = zoo::index(xin))))
+                        PaleoSpec::SpecMTM(stats::as.ts(zoo::zoo(xx, order.by = zoo::index(xin))))
                     spectrum$logsmooth <-
                         PaleoSpec::LogSmooth(spectrum$raw)
                     return(spectrum)
