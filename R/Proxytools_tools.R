@@ -754,7 +754,7 @@ paleodata_spectrum.zoo <-
                 apply(xin, 2, function(xx) {
                     spectrum <- list()
                     spectrum$raw <-
-                        PaleoSpec::SpecMTM(as.ts(zoo::zoo(xx, order.by = zoo::index(xin))))
+                        PaleoSpec::SpecMTM(timeSeries::as.ts(zoo::zoo(xx, order.by = zoo::index(xin))))
                     spectrum$logsmooth <-
                         PaleoSpec::LogSmooth(spectrum$raw)
                     return(spectrum)
