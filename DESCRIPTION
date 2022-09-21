@@ -19,7 +19,8 @@ Imports:
     purrr,
     tibble,
     zoo,
-    VGAM
+    VGAM,
+    sass
 Suggests:
     princurve,
     vegan,
