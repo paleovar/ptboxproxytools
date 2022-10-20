@@ -58,6 +58,9 @@ paleodata_windowing.Proxytibble <-
 #' @param xin Proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), xin can be multivariate
 #' @param interpolation_type Type of interpolation, either 'spline' (spline interpolation), or 'spectral' (using the interpolation method from Laepple and Huybers 2014, Rehfeld et al. 2018, implemented in 'PaleoSpec')
 #' @param interpolation_dates Dates of the interpolated time series
+#' @param remove_na Flag if NAs should be removed after the interpolation
+#' @param aggregation Flag if non-unique timesteps should be merged after the interpolation
+#' @param aggregation_fun Function for merging non-unique timesteps
 #'
 #' @return Proxytibble with interpolated proxy data in `zoo::zoo` format or interpolated irregular time series object (`zoo::zoo`)
 #' @export
@@ -82,13 +85,16 @@ paleodata_windowing.Proxytibble <-
 #'
 #' \link{MakeEquidistant} (from `PaleoSpec`) for 'spectral' interpolation (optimized for computation of spectral densities from irregular time series)
 #'
-paleodata_interpolation <- function(xin,interpolation_type,interpolation_dates) UseMethod('paleodata_interpolation')
+paleodata_interpolation <- function(xin,interpolation_type,interpolation_dates,remove_na = TRUE,aggregation = TRUE,aggregation_fun = mean) UseMethod('paleodata_interpolation')
 
 #' @export
 paleodata_interpolation.zoo <-
     function(xin,
              interpolation_type,
-             interpolation_dates) {
+             interpolation_dates,
+             remove_na = TRUE,
+             aggregation = TRUE,
+             aggregation_fun = mean) {
         if (!interpolation_type %in% c("spline","spectral")) {
             stop("`interpolation_type` not supported")
         }
@@ -102,7 +108,7 @@ paleodata_interpolation.zoo <-
                     order.by = interpolation_dates
                 )
                 colnames(xin) <- cln
-                return(clean_timeseries(xin))
+                return(clean_timeseries(xin,remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
             } else {
                 return(clean_timeseries(PTBoxProxydata::zoo_apply(xin,
                                  function(xx) {
@@ -113,7 +119,7 @@ paleodata_interpolation.zoo <-
                                          order.by = interpolation_dates)
                                      return(xo)
                                  },
-                                 out_index = interpolation_dates)))
+                                 out_index = interpolation_dates),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
             }
         }
         if (interpolation_type == "spline") {
@@ -123,14 +129,14 @@ paleodata_interpolation.zoo <-
                            xin,
                            xout = interpolation_dates)$y,
                     order.by = interpolation_dates
-                )))
+                ),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
             } else {
                 return(clean_timeseries(PTBoxProxydata::zoo_apply(xin,
                                  function(xx)
                                      spline(zoo::index(xx),
                                             xx,
                                             xout = interpolation_dates)$y,
-                                 out_index = interpolation_dates)))
+                                 out_index = interpolation_dates),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
             }
         }
     }
@@ -139,7 +145,10 @@ paleodata_interpolation.zoo <-
 paleodata_interpolation.Proxytibble <-
     function(xin,
              interpolation_type,
-             interpolation_dates) {
+             interpolation_dates,
+             remove_na = TRUE,
+             aggregation = TRUE,
+             aggregation_fun = mean) {
         if (!interpolation_type %in% c("spline","spectral")) {
             stop("`interpolation_type` not supported")
         }
@@ -150,7 +159,10 @@ paleodata_interpolation.Proxytibble <-
                 xin,
                 fun = paleodata_interpolation.zoo,
                 interpolation_type = interpolation_type,
-                interpolation_dates = interpolation_dates
+                interpolation_dates = interpolation_dates,
+                remove_na = remove_na,
+                aggregation = aggregation,
+                aggregation_fun = aggregation_fun
             )
         )
     }

@@ -4,7 +4,14 @@
 \alias{paleodata_interpolation}
 \title{Interpolation functions for irregular time series}
 \usage{
-paleodata_interpolation(xin, interpolation_type, interpolation_dates)
+paleodata_interpolation(
+  xin,
+  interpolation_type,
+  interpolation_dates,
+  remove_na = TRUE,
+  aggregation = TRUE,
+  aggregation_fun = mean
+)
 }
 \arguments{
 \item{xin}{Proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), xin can be multivariate}
@@ -12,6 +19,12 @@ paleodata_interpolation(xin, interpolation_type, interpolation_dates)
 \item{interpolation_type}{Type of interpolation, either 'spline' (spline interpolation), or 'spectral' (using the interpolation method from Laepple and Huybers 2014, Rehfeld et al. 2018, implemented in 'PaleoSpec')}
 
 \item{interpolation_dates}{Dates of the interpolated time series}
+
+\item{remove_na}{Flag if NAs should be removed after the interpolation}
+
+\item{aggregation}{Flag if non-unique timesteps should be merged after the interpolation}
+
+\item{aggregation_fun}{Function for merging non-unique timesteps}
 }
 \value{
 Proxytibble with interpolated proxy data in `zoo::zoo` format or interpolated irregular time series object (`zoo::zoo`)
