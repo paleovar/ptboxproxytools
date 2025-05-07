@@ -61,6 +61,8 @@ paleodata_windowing.Proxytibble <-
 #' @param remove_na Flag if NAs should be removed after the interpolation
 #' @param aggregation Flag if non-unique timesteps should be merged after the interpolation
 #' @param aggregation_fun Function for merging non-unique timesteps
+#' @param bin_width Width of bins if interpolation method is "binning". Defaults to the mean sample resolution (no variable bin sizes are supported at the moment)
+#' @param binning_function How should values within one bin be averaged? Default is "mean"
 #'
 #' @return Proxytibble with interpolated proxy data in `zoo::zoo` format or interpolated irregular time series object (`zoo::zoo`)
 #' @export
@@ -85,7 +87,14 @@ paleodata_windowing.Proxytibble <-
 #'
 #' \link{MakeEquidistant} (from `PaleoSpec`) for 'spectral' interpolation (optimized for computation of spectral densities from irregular time series)
 #'
-paleodata_interpolation <- function(xin,interpolation_type,interpolation_dates,remove_na = TRUE,aggregation = TRUE,aggregation_fun = mean) UseMethod('paleodata_interpolation')
+paleodata_interpolation <- function(xin,interpolation_type,
+                                    interpolation_dates,
+                                    remove_na = TRUE,
+                                    aggregation = TRUE,
+                                    aggregation_fun = mean,
+                                    bin_width = mean(diff(interpolation_dates)),
+                                    binning_function = mean)
+    UseMethod('paleodata_interpolation')
 
 #' @export
 paleodata_interpolation.zoo <-
@@ -94,8 +103,10 @@ paleodata_interpolation.zoo <-
              interpolation_dates,
              remove_na = TRUE,
              aggregation = TRUE,
-             aggregation_fun = mean) {
-        if (!interpolation_type %in% c("spline","spectral")) {
+             aggregation_fun = mean,
+             bin_width = mean(diff(interpolation_dates)),
+             binning_function = mean) {
+        if (!interpolation_type %in% c("spline","spectral","binning")) {
             stop("`interpolation_type` not supported")
         }
         if (interpolation_type == "spectral") {
@@ -132,11 +143,30 @@ paleodata_interpolation.zoo <-
                 ),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
             } else {
                 return(clean_timeseries(PTBoxProxydata::zoo_apply(xin,
-                                 function(xx)
-                                     spline(zoo::index(xx),
-                                            xx,
-                                            xout = interpolation_dates)$y,
-                                 out_index = interpolation_dates),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+                                                                  function(xx)
+                                                                      spline(zoo::index(xx),
+                                                                             xx,
+                                                                             xout = interpolation_dates)$y,
+                                                                  out_index = interpolation_dates),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+            }
+        }
+        if (interpolation_type == "binning") {
+            if (! ("matrix" %in% class(zoo::coredata(xin)))) {
+                return(clean_timeseries(zoo::zoo(
+                    binning(xin,
+                            interpolation_dates = interpolation_dates,
+                            bin_width = bin_width,
+                            binning_function = binning_function),
+                    order.by = interpolation_dates
+                ),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+            } else {
+                return(clean_timeseries(PTBoxProxydata::zoo_apply(xin,
+                                                                  function(xx)
+                                                                      binning(xx,
+                                                                              interpolation_dates = interpolation_dates,
+                                                                              bin_width = bin_width,
+                                                                              binning_function = binning_function),
+                                                                  out_index = interpolation_dates),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
             }
         }
     }
@@ -148,7 +178,9 @@ paleodata_interpolation.Proxytibble <-
              interpolation_dates,
              remove_na = TRUE,
              aggregation = TRUE,
-             aggregation_fun = mean) {
+             aggregation_fun = mean,
+             bin_width = mean(diff(interpolation_dates)),
+             binning_function = mean) {
         if (!interpolation_type %in% c("spline","spectral")) {
             stop("`interpolation_type` not supported")
         }
@@ -162,7 +194,9 @@ paleodata_interpolation.Proxytibble <-
                 interpolation_dates = interpolation_dates,
                 remove_na = remove_na,
                 aggregation = aggregation,
-                aggregation_fun = aggregation_fun
+                aggregation_fun = aggregation_fun,
+                bin_width = mean(diff(interpolation_dates)),
+                binning_function = mean
             )
         )
     }

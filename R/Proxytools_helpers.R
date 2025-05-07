@@ -290,6 +290,22 @@ calculate_ci <- function(samples,level,simple=TRUE) {
     return(c(ci_min,ci_max))
 }
 
+#' Binning
+#'
+#' @param xin Input zoo
+#' @param interpolation_dates Output time axis
+#' @param bin_width Width of bins if interpolation method is "binning". Defaults to the mean sample resolution (no variable bin sizes are supported at the moment)
+#' @param binning_function How should values within one bin be averaged? Default is "mean"
+#'
+#' @returns Zoo with binned values at the provided interpolation_dates
+#' @export
+#'
+#' @examples
+binning <- function(xin, interpolation_dates, bin_width = mean(diff(interpolation_dates)), binning_function = mean) {
+    xout <- zoo::zoo(sapply(interpolation_dates, function(x) binning_function(paleodata_windowing(xin,x-bin_width/2,x+bin_width/2),na.rm=TRUE)),order.by=interpolation_dates)
+    return(xout)
+}
+
 
 ### Private helpers ----
 
@@ -323,3 +339,4 @@ qtrafo <- function(x,weighted=FALSE) {
     }
     return(trafo)
 }
+
