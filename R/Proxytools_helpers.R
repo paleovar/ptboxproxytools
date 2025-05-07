@@ -299,13 +299,24 @@ calculate_ci <- function(samples,level,simple=TRUE) {
 #'
 #' @returns Zoo with binned values at the provided interpolation_dates
 #' @export
-#'
-#' @examples
 binning <- function(xin, interpolation_dates, bin_width = mean(diff(interpolation_dates)), binning_function = mean) {
     xout <- zoo::zoo(sapply(interpolation_dates, function(x) binning_function(paleodata_windowing(xin,x-bin_width/2,x+bin_width/2),na.rm=TRUE)),order.by=interpolation_dates)
     return(xout)
 }
 
+
+#' Efficient resampling of elements for uncertainty quantification with bootstrapping
+#'
+#' @param x Input data
+#' @param size Number of output elements, defaults to length(x)
+#' @param replace Replace entries?, defaults to TRUE
+#' @param ... Other parameters for sample.int
+#'
+#' @returns Shuffled version of input data
+#' @export
+resample <- function(x, size=length(x), replace=TRUE, ...) {
+    return(x[sample.int(length(x), size=size, replace=TRUE, ...)])
+}
 
 ### Private helpers ----
 

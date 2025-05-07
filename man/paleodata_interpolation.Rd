@@ -10,7 +10,9 @@ paleodata_interpolation(
   interpolation_dates,
   remove_na = TRUE,
   aggregation = TRUE,
-  aggregation_fun = mean
+  aggregation_fun = mean,
+  bin_width = mean(diff(interpolation_dates)),
+  binning_function = mean
 )
 }
 \arguments{
@@ -25,6 +27,10 @@ paleodata_interpolation(
 \item{aggregation}{Flag if non-unique timesteps should be merged after the interpolation}
 
 \item{aggregation_fun}{Function for merging non-unique timesteps}
+
+\item{bin_width}{Width of bins if interpolation method is "binning". Defaults to the mean sample resolution (no variable bin sizes are supported at the moment)}
+
+\item{binning_function}{How should values within one bin be averaged? Default is "mean"}
 }
 \value{
 Proxytibble with interpolated proxy data in `zoo::zoo` format or interpolated irregular time series object (`zoo::zoo`)
