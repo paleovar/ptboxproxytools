@@ -315,7 +315,7 @@ binning <- function(xin, interpolation_dates, bin_width = mean(diff(interpolatio
 #' @returns Shuffled version of input data
 #' @export
 resample <- function(x, size=length(x), replace=TRUE, ...) {
-    return(x[sample.int(length(x), size=size, replace=TRUE, ...)])
+    return(x[sample.int(length(x), size=size, replace=replace, ...)])
 }
 
 ### Private helpers ----
