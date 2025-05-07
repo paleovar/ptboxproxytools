@@ -487,6 +487,9 @@ paleodata_signal_extraction.Proxytibble <- function(xin,signal_type,signal_compo
 #' @param interpolation_dates Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.
 #' @param transformation Logical: should transformation be applied?
 #' @param transformation_type Parameters for transformation (see paleodata_transformation)
+#' @param detrend Logical: should time series be linearly detrend before computing the spectrum
+#' @param df_log Width of the log-smoother in log units
+#' @param bLog TRUE: average in the log space of the power, FALSE: arithmetic average
 #'
 #' @return List with estimated variance
 #' @export
@@ -514,7 +517,10 @@ paleodata_varfromspec <-
              interpolation_type = "spectral",
              interpolation_dates = NULL,
              transformation = FALSE,
-             transformation_type = "normalize")
+             transformation_type = "normalize",
+             detrend = TRUE,
+             df_log = 0.05,
+             bLog = FALSE)
         UseMethod('paleodata_varfromspec')
 
 
@@ -528,7 +534,10 @@ paleodata_varfromspec.zoo <-
              interpolation_type = "spectral",
              interpolation_dates = NULL,
              transformation = FALSE,
-             transformation_type = "normalize") {
+             transformation_type = "normalize",
+             detrend = TRUE,
+             df_log = 0.05,
+             bLog = FALSE) {
 
         GetVar <- function (spec, f, dfreq = NULL)
         {
@@ -563,7 +572,10 @@ paleodata_varfromspec.zoo <-
                                   interpolation_type,
                                   interpolation_dates,
                                   transformation,
-                                  transformation_type)
+                                  transformation_type,
+                                  detrend = detrend,
+                                  df_log = df_log,
+                                  bLog = bLog)
         # If xin is multivariate and therefore a list of spectra is compute use lapply, otherwise not
         if  (dim(as.matrix(xin))[2] > 1) {
             variance = lapply(xspec, function(xx) {GetVar(xx[[target]], f=c(freq.start, freq.end))})
@@ -583,7 +595,10 @@ paleodata_varfromspec.Proxytibble <- function(xin,
                                           interpolation_type = "spectral",
                                           interpolation_dates = NULL,
                                           transformation = FALSE,
-                                          transformation_type = "normalize") {
+                                          transformation_type = "normalize",
+                                          detrend = TRUE,
+                                          df_log = 0.05,
+                                          bLog = FALSE) {
     if (all(class(xin[[PTBoxProxydata::Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`paleodata_varfromspec` only implemented for `zoo_format == 'zoo'`")
     return(
@@ -597,7 +612,10 @@ paleodata_varfromspec.Proxytibble <- function(xin,
             interpolation_dates = interpolation_dates,
             interpolation_type = interpolation_type,
             transformation = transformation,
-            transformation_type = transformation_type
+            transformation_type = transformation_type,
+            detrend = detrend,
+            df_log = df_log,
+            bLog = bLog
         )
     )
 }
@@ -614,6 +632,9 @@ paleodata_varfromspec.Proxytibble <- function(xin,
 #' @param interpolation_dates Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.
 #' @param transformation Logical: should transformation be applied?
 #' @param transformation_type Parameters for transformation (see paleodata_transformation)
+#' @param detrend Logical: should time series be linearly detrend before computing the spectrum
+#' @param df_log Width of the log-smoother in log units
+#' @param bLog TRUE: average in the log space of the power, FALSE: arithmetic average
 #'
 #' @return List with scaling coefficient, standard deviation and spectra (object description in SpecMTM and LogSmooth functions of PaleoSpec package)
 #' @export
@@ -641,7 +662,10 @@ paleodata_scaling <-
              interpolation_type = "spectral",
              interpolation_dates = NULL,
              transformation = FALSE,
-             transformation_type = "normalize")
+             transformation_type = "normalize",
+             detrend = TRUE,
+             df_log = 0.05,
+             bLog = FALSE)
         UseMethod('paleodata_scaling')
 
 
@@ -655,14 +679,20 @@ paleodata_scaling.zoo <-
              interpolation_type = "spectral",
              interpolation_dates = NULL,
              transformation = FALSE,
-             transformation_type = "normalize") {
+             transformation_type = "normalize",
+             detrend = TRUE,
+             df_log = 0.05,
+             bLog = FALSE) {
 
         xin <- paleodata_spectrum(xin,
                                  interpolation,
                                  interpolation_type,
                                  interpolation_dates,
                                  transformation,
-                                 transformation_type)
+                                 transformation_type,
+                                 detrend = detrend,
+                                 df_log = df_log,
+                                 bLog = bLog)
 
         scaling = lapply(xin, function(xx) {PaleoSpec::SlopeFit(xx[[target]], freq.start, freq.end)})
 
@@ -678,7 +708,10 @@ paleodata_scaling.Proxytibble <- function(xin,
                                           interpolation_type = "spectral",
                                           interpolation_dates = NULL,
                                           transformation = FALSE,
-                                          transformation_type = "normalize") {
+                                          transformation_type = "normalize",
+                                          detrend = TRUE,
+                                          df_log = 0.05,
+                                          bLog = FALSE) {
     if (all(class(xin[[PTBoxProxydata::Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`paleodata_spectrum` only implemented for `zoo_format == 'zoo'`")
     return(
@@ -692,7 +725,10 @@ paleodata_scaling.Proxytibble <- function(xin,
             interpolation_dates = interpolation_dates,
             interpolation_type = interpolation_type,
             transformation = transformation,
-            transformation_type = transformation_type
+            transformation_type = transformation_type,
+            detrend = detrend,
+            df_log = df_log,
+            bLog = bLog
         )
     )
 }
@@ -706,6 +742,9 @@ paleodata_scaling.Proxytibble <- function(xin,
 #' @param interpolation_dates Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.
 #' @param transformation Logical: should transformation be applied?
 #' @param transformation_type Parameters for transformation (see paleodata_transformation)
+#' @param detrend Logical: should time series be linearly detrend before computing the spectrum
+#' @param df_log Width of the log-smoother in log units
+#' @param bLog TRUE: average in the log space of the power, FALSE: arithmetic average
 #'
 #' @return List with raw and log-smoothed spectra (object description in SpecMTM and LogSmooth functions of PaleoSpec package)
 #' @export
@@ -737,7 +776,10 @@ paleodata_spectrum <-
              interpolation_type = "spectral",
              interpolation_dates = NULL,
              transformation = FALSE,
-             transformation_type = "normalize")
+             transformation_type = "normalize",
+             detrend = TRUE,
+             df_log = 0.05,
+             bLog = FALSE)
         UseMethod('paleodata_spectrum')
 
 
@@ -748,7 +790,10 @@ paleodata_spectrum.zoo <-
              interpolation_type = "spectral",
              interpolation_dates = NULL,
              transformation = FALSE,
-             transformation_type = "normalize") {
+             transformation_type = "normalize",
+             detrend = TRUE,
+             df_log = 0.05,
+             bLog = FALSE) {
         if(is.null(interpolation_dates)){
             interpolation_dates = seq(from = zoo::index(xin)[1], zoo::index(xin)[length(zoo::index(xin))],
                                   by = mean(diff(zoo::index(xin))))
@@ -761,15 +806,15 @@ paleodata_spectrum.zoo <-
         }
         if (! ("matrix" %in% class(zoo::coredata(xin)))) {
             spectrum <- list()
-            spectrum$raw <- PaleoSpec::SpecMTM(stats::as.ts(xin))
-            spectrum$logsmooth <- PaleoSpec::LogSmooth(spectrum$raw)
+            spectrum$raw <- PaleoSpec::SpecMTM(stats::as.ts(xin), detrend = detrend)
+            spectrum$logsmooth <- PaleoSpec::LogSmooth(spectrum$raw, df_log = df_log, bLog = bLog)
             return(spectrum)
         } else {
             spectra <-
                 apply(xin, 2, function(xx) {
                     spectrum <- list()
                     spectrum$raw <-
-                        PaleoSpec::SpecMTM(stats::as.ts(zoo::zoo(xx, order.by = zoo::index(xin))))
+                        PaleoSpec::SpecMTM(stats::as.ts(zoo::zoo(xx, order.by = zoo::index(xin))), detrend = detrend)
                     spectrum$logsmooth <-
                         PaleoSpec::LogSmooth(spectrum$raw)
                     return(spectrum)
@@ -784,7 +829,10 @@ paleodata_spectrum.Proxytibble <- function(xin,
                                             interpolation_type = "spectral",
                                             interpolation_dates = NULL,
                                             transformation = FALSE,
-                                            transformation_type = "normalize") {
+                                            transformation_type = "normalize",
+                                            detrend = TRUE,
+                                            df_log = 0.05,
+                                            bLog = FALSE) {
     if (all(class(xin[[PTBoxProxydata::Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
         stop("`paleodata_spectrum` only implemented for `zoo_format == 'zoo'`")
     return(
@@ -795,7 +843,10 @@ paleodata_spectrum.Proxytibble <- function(xin,
             interpolation_dates = interpolation_dates,
             interpolation_type = interpolation_type,
             transformation = transformation,
-            transformation_type = transformation_type
+            transformation_type = transformation_type,
+            detrend = detrend,
+            df_log = df_log,
+            bLog = bLog
         )
     )
 }

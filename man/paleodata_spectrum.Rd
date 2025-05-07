@@ -10,7 +10,10 @@ paleodata_spectrum(
   interpolation_type = "spectral",
   interpolation_dates = NULL,
   transformation = FALSE,
-  transformation_type = "normalize"
+  transformation_type = "normalize",
+  detrend = TRUE,
+  df_log = 0.05,
+  bLog = FALSE
 )
 }
 \arguments{
@@ -25,6 +28,12 @@ paleodata_spectrum(
 \item{transformation}{Logical: should transformation be applied?}
 
 \item{transformation_type}{Parameters for transformation (see paleodata_transformation)}
+
+\item{detrend}{Logical: should time series be linearly detrend before computing the spectrum}
+
+\item{df_log}{Width of the log-smoother in log units}
+
+\item{bLog}{TRUE: average in the log space of the power, FALSE: arithmetic average}
 }
 \value{
 List with raw and log-smoothed spectra (object description in SpecMTM and LogSmooth functions of PaleoSpec package)
