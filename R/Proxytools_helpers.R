@@ -114,7 +114,7 @@ normalize <- function(xin,center=TRUE,scale=TRUE) UseMethod('normalize')
 
 #' @export
 normalize.zoo <- function(xin, center = TRUE, scale = TRUE) {
-    if (class(zoo::coredata(xin)) != "matrix") {
+    if (!("matrix" %in% class(zoo::coredata(xin)))) {
         if (center == TRUE) {
             xin <- xin - mean(xin, na.rm = TRUE)
         }
