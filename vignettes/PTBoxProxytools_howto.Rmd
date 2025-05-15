@@ -81,7 +81,7 @@ some_window <- icecore_data$proxy_data[[1]] %>%
   .[c(1,length(.))]
 outtimes <- seq(some_window[1], some_window[2], length.out = 20)
 testout <- icecore_data$proxy_data[[1]] %>% 
-  paleodata_interpolation(., "spectral", outtimes)
+  paleodata_interpolation(., outtimes, "lh14")
 head(testout,3)
 print(dim(testout)[1])
 # output is still a zoo

@@ -12,8 +12,9 @@ paleodata_processing(
   detr_scale = NULL,
   smooth_scale = NULL,
   interpolation = FALSE,
-  method = NULL,
-  xout = NULL,
+  interpolation_method = NULL,
+  interpolation_xout = NULL,
+  interpolation_gk_smooth_scale = NULL,
   windowing = FALSE,
   start_date = NULL,
   end_date = NULL,
@@ -39,10 +40,6 @@ paleodata_processing(
 
 \item{interpolation}{Logical: should interpolation be applied?}
 
-\item{method}{Parameters for interpolation (see paleodata_interpolation)}
-
-\item{xout}{Parameters for interpolation (see paleodata_interpolation)}
-
 \item{windowing}{Logical: should restriction to time window be applied?}
 
 \item{start_date}{Parameters for windowing (see paleodata_windowing)}
@@ -58,6 +55,10 @@ paleodata_processing(
 \item{signal_type}{Parameters for signal extraction (see paleodata_signal_extraction)}
 
 \item{signal_components}{Parameters for signal extraction (see paleodata_signal_extraction)}
+
+\item{method}{Parameters for interpolation (see paleodata_interpolation)}
+
+\item{xout}{Parameters for interpolation (see paleodata_interpolation)}
 }
 \value{
 Proxytibble with proxy data in `zoo::zoo` format or irregular time series object (`zoo::zoo`) containing the processed signals

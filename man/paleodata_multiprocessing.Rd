@@ -13,8 +13,9 @@ paleodata_multiprocessing(
   detr_scale = NULL,
   smooth_scale = NULL,
   interpolation = rep(FALSE, times = length(processing_name)),
-  method = NULL,
-  xout = NULL,
+  interpolation_method = NULL,
+  interpolation_xout = NULL,
+  interpolation_gk_smooth_scale = NULL,
   windowing = rep(FALSE, times = length(processing_name)),
   start_date = NULL,
   end_date = NULL,
@@ -42,10 +43,6 @@ paleodata_multiprocessing(
 
 \item{interpolation}{Vector of logicals: should interpolation be applied?}
 
-\item{method}{Vector of parameters for interpolation (see paleodata_interpolation)}
-
-\item{xout}{Vector of parameters for interpolation (see paleodata_interpolation)}
-
 \item{windowing}{Vector of logicals: should restriction to time window be applied?}
 
 \item{start_date}{Vector of parameters for windowing (see paleodata_windowing)}
@@ -61,6 +58,10 @@ paleodata_multiprocessing(
 \item{signal_type}{Vector of parameters for signal extraction (see paleodata_signal_extraction)}
 
 \item{signal_components}{Vector of parameters for signal extraction (see paleodata_signal_extraction)}
+
+\item{method}{Vector of parameters for interpolation (see paleodata_interpolation)}
+
+\item{xout}{Vector of parameters for interpolation (see paleodata_interpolation)}
 }
 \value{
 List of processed signals, provided as list of irregular time series objects (`zoo::zoo`). Fields `$data` contain the processed signals.
