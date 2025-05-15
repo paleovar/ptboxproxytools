@@ -4,24 +4,19 @@
 \alias{binning}
 \title{Binning}
 \usage{
-binning(
-  xin,
-  interpolation_dates,
-  bin_width = mean(diff(interpolation_dates)),
-  binning_function = mean
-)
+binning(xin, xout, bin_width = mean(diff(xout)), binning_function = mean)
 }
 \arguments{
 \item{xin}{Input zoo}
 
-\item{interpolation_dates}{Output time axis}
+\item{xout}{Output time axis}
 
 \item{bin_width}{Width of bins if interpolation method is "binning". Defaults to the mean sample resolution (no variable bin sizes are supported at the moment)}
 
 \item{binning_function}{How should values within one bin be averaged? Default is "mean"}
 }
 \value{
-Zoo with binned values at the provided interpolation_dates
+Zoo with binned values at the provided interpolation dates
 }
 \description{
 Binning

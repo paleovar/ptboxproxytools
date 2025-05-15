@@ -293,17 +293,100 @@ calculate_ci <- function(samples,level,simple=TRUE) {
 #' Binning
 #'
 #' @param xin Input zoo
-#' @param interpolation_dates Output time axis
+#' @param xout Output time axis
 #' @param bin_width Width of bins if interpolation method is "binning". Defaults to the mean sample resolution (no variable bin sizes are supported at the moment)
 #' @param binning_function How should values within one bin be averaged? Default is "mean"
 #'
-#' @returns Zoo with binned values at the provided interpolation_dates
+#' @returns Zoo with binned values at the provided interpolation dates
 #' @export
-binning <- function(xin, interpolation_dates, bin_width = mean(diff(interpolation_dates)), binning_function = mean) {
-    xout <- zoo::zoo(sapply(interpolation_dates, function(x) binning_function(paleodata_windowing(xin,x-bin_width/2,x+bin_width/2),na.rm=TRUE)),order.by=interpolation_dates)
+binning <- function(xin, xout, bin_width = mean(diff(xout)), binning_function = mean) {
+    xout <- zoo::zoo(sapply(xout, function(x) binning_function(paleodata_windowing(xin,x-bin_width/2,x+bin_width/2),na.rm=TRUE)),order.by=xout)
     return(xout)
 }
 
+
+#' Anti-aliasing linear interpolation method from Baudouin et al. 2025 ("bwr25")
+#'
+# "bwr25" combines linear interpolation to high resoluton to reduce aliasing and binning the high-resolution output to the desired resolution
+# At the moment, it only works with an equally spaced xout
+# It uses a fixed 10 times xout resolution for anti-aliasing
+#'
+#' @param xin Input zoo
+#' @param xout Output time axis (only equally spaced xout are supported at the moment)
+#'
+#' @returns Zoo with interpolated values
+#' @export
+interp_bwr25 <- function(xin,xout) {
+    n <- length(xout)
+    xout_highres <- seq(xout[1]*1.45 - 0.45*xout[2], xout[n]*1.45 - 0.45*xout[n-1], (xout[2]-xout[1])/10)
+    xout_highres <- zoo::zoo(approx(x = zoo::index(xin), y = zoo::coredata(xin), xout = xout_highres)$y, order.by=xout_highres)
+    sel <- seq(1, length(xout_highres), 10)
+    y <- rep(0, length(xout))
+    for (j in 1:10) {
+        y <- y + zoo::coredata(xout_highres)[sel+j-1]
+    }
+    return(zoo::zoo(y/10, order.by=xout))
+}
+
+#' Gaussian kernel interpolation and smoothing
+#'
+#' @param xin Input too
+#' @param xout Output time axis
+#' @param smooth_scale Smoothing scale of the Gaussian kernel
+#' @param pass Gain at the smoothing scale
+#'
+#' @returns Zoo with smoothed and interpolated values at the provided interpolation dates
+#' @export
+#'
+#' @seealso
+#' \link{ksmooth} (from `stats`) is used for the smoothing and interpolation, but with modified definition of the kernel width to align better with timescale point of view
+#'
+gkinterp <- function(xin, xout, smooth_scale, pass = 0.5) {
+    xout <- zoo::zoo(ksmooth(zoo::index(xin), zoo::coredata(xin), bandwidth = smooth_scale/pi*sqrt(log(1/pass)/2)*4*qnorm(0.75, 0, 1), x.points = xout, kernel = "normal")$y,order.by=xout)
+    # sqrt(log(1/pass)/2)/pi comes from the fourier transform of the gaussian kernel: the gain is "pass" when apply at the smoothing scale (cutoff period)
+    # 4*qnorm(0.75, 0, 1) comes from the definition of ksmooth
+    return(xout)
+}
+
+
+#' Remove samples in interpolated zoo that are far away from original samples
+#'
+#' @param xin_raw Original proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), xin can be multivariate
+#' @param xin_interp Zoo with interpolated values (all timeseries from xin_raw need to be interpolated to the same time axis), xin_interp can have dimension 1 (time), 2 (time x records or sites x time), or 3 (sites x time x records)
+#' @param max_dist Cutoff distance from nearest raw sample beyond which values in xin_interp are set to NA
+#'
+#' @return zoo of same dimension as xin_interp
+#' @export
+#'
+remove_extrapolated_samples <- function(xin_raw, xin_interp,max_dist=5*mean(diff(zoo::index(xin_interp)))) UseMethod('remove_extrapolated_samples')
+#' @export
+remove_extrapolated_samples.zoo <- function(xin_raw, xin_interp,max_dist=5*mean(diff(zoo::index(xin_interp)))) {
+    for (j in 1:length(zoo::index(xin_interp))) {
+        if (min(abs(zoo::index(xin_raw) - zoo::index(xin_interp)[j])) > max_dist) {
+            if (!("matrix" %in% class(zoo::coredata(xin_interp)))) {
+                xin_interp[j] <- NA
+            } else {
+                xin_interp[j,] <- NA
+            }
+        }
+    }
+    return(xin_interp)
+}
+#' @export
+remove_extrapolated_samples.Proxytibble <- function(xin_raw, xin_interp,max_dist=5*mean(diff(zoo::index(xin_interp)))) {
+    for (i in 1:dim(proxytibble)[1]) {
+        for (j in 1:length(zoo::index(xin_interp))) {
+            if (min(abs(zoo::index(xin_raw$proxy_data[[i]]) - zoo::index(xin_interp)[j])) > max_dist) {
+                if (length(dim(xin_interp)) == 2) {
+                    xin_interp[i,j] <- NA
+                } else {
+                    xin_interp[i,j,] <- NA
+                }
+            }
+        }
+    }
+    return(xin_interp)
+}
 
 #' Efficient resampling of elements for uncertainty quantification with bootstrapping
 #'

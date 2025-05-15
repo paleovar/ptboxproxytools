@@ -56,13 +56,19 @@ paleodata_windowing.Proxytibble <-
 #' Interpolation functions for irregular time series
 #'
 #' @param xin Proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), xin can be multivariate
-#' @param interpolation_type Type of interpolation, either 'spline' (spline interpolation), or 'spectral' (using the interpolation method from Laepple and Huybers 2014, Rehfeld et al. 2018, implemented in 'PaleoSpec')
-#' @param interpolation_dates Dates of the interpolated time series
+#' @param xout Dates of the interpolated time series
+#' @param method Type of interpolation, either 'linear' (piecewise linear interpolation), 'nn' (nearest neighbor), spline' (spline interpolation), 'lh14' (using the interpolation method from Laepple and Huybers 2014, Rehfeld et al. 2018, implemented in 'PaleoSpec'), 'binning' (aggregation in equally-sized bins), 'loess' (loess interpolation), 'bwr25' (binning with initial linear interpolation ot high resolution to mitigate aliasing, from Baudouin et al. 2025), 'gk' (Gaussian kernel smoothing and interpolation)
 #' @param remove_na Flag if NAs should be removed after the interpolation
 #' @param aggregation Flag if non-unique timesteps should be merged after the interpolation
 #' @param aggregation_fun Function for merging non-unique timesteps
+#' @param lh14_lowpass Scaling factor for the lowpass frequency. Default is 1.2 (same as in PaleoSpec::MakeEquidistant)
+#' @param lh14_length Scaling factor for the Length of the filter. Default is 5 (same as in PaleoSpec::MakeEquidistant)
 #' @param bin_width Width of bins if interpolation method is "binning". Defaults to the mean sample resolution (no variable bin sizes are supported at the moment)
 #' @param binning_function How should values within one bin be averaged? Default is "mean"
+#' @param loess_span "span" parameter in loess fitting, controls degree of smoothing
+#' @param gk_antialiasing Should linear interpolation to higher resolution be applied prior to smoothing to avoid aliasing. Default is "TRUE"
+#' @param gk_smooth_scale Smoothing scale of the Gaussian kernel
+#' @param gk_pass Gain at the smoothing scale. Default is 0.5
 #'
 #' @return Proxytibble with interpolated proxy data in `zoo::zoo` format or interpolated irregular time series object (`zoo::zoo`)
 #' @export
@@ -77,112 +83,225 @@ paleodata_windowing.Proxytibble <-
 #' # Plot datasets
 #' plot(icecoredata_interpolated$proxy_data[[1]])
 #' plot(icecoredata_interpolated$proxy_data[[2]])
-#' # Interpolate to a regular 1000yr resolution between 30ka BP and 60ka BP using interpolation method from PaleoSpec package (named "spectral" because it is optimized for computation of spectral densities)
-#' edc_data_interpolated <- paleodata_interpolation(icecoredata$proxy_data[[1]],"spectral",seq(30000,60000,by=100))
+#' # Interpolate to a regular 1000yr resolution between 30ka BP and 60ka BP using interpolation method from PaleoSpec package (named "lh14" after Laepple and Huybers 2014, this method is optimized for computation of spectral densities)
+#' edc_data_interpolated <- paleodata_interpolation(icecoredata$proxy_data[[1]],"lh14",seq(30000,60000,by=100))
 #' # Plot zoo data
 #' plot(edc_data_interpolated)
 #'
 #' @seealso
+#' \link{optim} (from `stats`) for linear and nn interpolation
+#'
 #' \link{spline} (from `stats`) for spline interpolation
 #'
-#' \link{MakeEquidistant} (from `PaleoSpec`) for 'spectral' interpolation (optimized for computation of spectral densities from irregular time series)
+#' \link{MakeEquidistant} (from `PaleoSpec`) for 'lh14' interpolation (optimized for computation of spectral densities from irregular time series)
 #'
-paleodata_interpolation <- function(xin,interpolation_type,
-                                    interpolation_dates,
+#' \link{loess} (from `stats`) for loess interpolation
+#'
+#' \link{ksmooth} (from `stats`) for Gaussian kernel interpolation
+#'
+paleodata_interpolation <- function(xin,
+                                    xout,
+                                    method,
                                     remove_na = TRUE,
                                     aggregation = TRUE,
                                     aggregation_fun = mean,
-                                    bin_width = mean(diff(interpolation_dates)),
-                                    binning_function = mean)
+                                    remove_extrapolated_values = FALSE,
+                                    max_dist = 5*mean(diff(zoo::index(xout))),
+                                    lh14_lowpass = 1.2,
+                                    lh14_length = 5,
+                                    bin_width = mean(diff(xout)),
+                                    binning_function = mean,
+                                    loess_span = 0.25,
+                                    gk_antialiasing = TRUE,
+                                    gk_smooth_scale = NULL,
+                                    gk_pass = 0.5)
     UseMethod('paleodata_interpolation')
 
 #' @export
 paleodata_interpolation.zoo <-
     function(xin,
-             interpolation_type,
-             interpolation_dates,
+             xout,
+             method,
              remove_na = TRUE,
              aggregation = TRUE,
              aggregation_fun = mean,
-             bin_width = mean(diff(interpolation_dates)),
-             binning_function = mean) {
-        if (!interpolation_type %in% c("spline","spectral","binning")) {
-            stop("`interpolation_type` not supported")
+             remove_extrapolated_values = FALSE,
+             max_dist = 5*mean(diff(zoo::index(xout))),
+             lh14_lowpass = 1.2,
+             lh14_length = 5,
+             bin_width = mean(diff(xout)),
+             binning_function = mean,
+             loess_span = 0.25,
+             gk_antialiasing = TRUE,
+             gk_smooth_scale = NULL,
+             gk_pass = 0.5) {
+        if (!method %in% c("linear","nn","spline","lh14","binning","loess","bwr25","gk")) {
+            stop("`method` not supported")
         }
-        if (interpolation_type == "spectral") {
+        if (method == "linear") {
             if (! ("matrix" %in% class(zoo::coredata(xin)))) {
                 cln <- colnames(xin)
-                xin <- zoo::zoo(
+                xout <- zoo::zoo(
+                    approx(zoo::index(xin), zoo::coredata(xin), xout=xout, method = "linear")$y,
+                    order.by = xout
+                )
+                colnames(xout) <- cln
+            } else {
+                xout <- PTBoxProxydata::zoo_apply(xin,
+                                                  function(xx) {
+                                                      xo <- zoo::zoo(
+                                                          approx(zoo::index(xx), zoo::coredata(xx), xout=xout, method = "linear")$y,
+                                                          order.by = xout)
+                                                      return(xo)
+                                                  },
+                                                  out_index = xout)
+            }
+        }
+        if (method == "nn") {
+            if (! ("matrix" %in% class(zoo::coredata(xin)))) {
+                cln <- colnames(xin)
+                xout <- zoo::zoo(
+                    approx(zoo::index(xin), zoo::coredata(xin), xout=xout, method = "constant")$y,
+                    order.by = xout
+                )
+                colnames(xout) <- cln
+            } else {
+                xout <- PTBoxProxydata::zoo_apply(xin,
+                                                  function(xx) {
+                                                      xo <- zoo::zoo(
+                                                          approx(zoo::index(xx), zoo::coredata(xx), xout=xout, method = "constant")$y,
+                                                          order.by = xout)
+                                                      return(xo)
+                                                  },
+                                                  out_index = xout)
+            }
+        }
+        if (method == "lh14") {
+            if (! ("matrix" %in% class(zoo::coredata(xin)))) {
+                cln <- colnames(xin)
+                xout <- zoo::zoo(
                     PaleoSpec::MakeEquidistant(zoo::index(xin),
                                                xin,
-                                               time.target = interpolation_dates),
-                    order.by = interpolation_dates
+                                               time.target = xout,
+                                               k=lh14_length,
+                                               kf=lh14_lowpass),
+                    order.by = xout
                 )
-                colnames(xin) <- cln
-                return(clean_timeseries(xin,remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+                colnames(xout) <- cln
             } else {
-                return(clean_timeseries(PTBoxProxydata::zoo_apply(xin,
+                xout <- PTBoxProxydata::zoo_apply(xin,
                                  function(xx) {
                                      xo <- zoo::zoo(
                                          PaleoSpec::MakeEquidistant(zoo::index(xx),
                                                                     xx,
-                                                                    time.target = interpolation_dates),
-                                         order.by = interpolation_dates)
+                                                                    time.target = xout,
+                                                                    k=lh14_length,
+                                                                    kf=lh14_lowpass),
+                                         order.by = xout)
                                      return(xo)
                                  },
-                                 out_index = interpolation_dates),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+                                 out_index = xout)
             }
         }
-        if (interpolation_type == "spline") {
+        if (method == "spline") {
             if (! ("matrix" %in% class(zoo::coredata(xin)))) {
-                return(clean_timeseries(zoo::zoo(
+                xout <- zoo::zoo(
                     spline(zoo::index(xin),
                            xin,
-                           xout = interpolation_dates)$y,
-                    order.by = interpolation_dates
-                ),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+                           xout = xout)$y,
+                    order.by = xout
+                )
             } else {
-                return(clean_timeseries(PTBoxProxydata::zoo_apply(xin,
-                                                                  function(xx)
-                                                                      spline(zoo::index(xx),
-                                                                             xx,
-                                                                             xout = interpolation_dates)$y,
-                                                                  out_index = interpolation_dates),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+                xout <- PTBoxProxydata::zoo_apply(xin,
+                                                  function(xx)
+                                                      spline(zoo::index(xx),
+                                                             xx,
+                                                             xout = xout)$y,
+                                                  out_index = xout)
             }
         }
-        if (interpolation_type == "binning") {
+        if (method == "binning") {
             if (! ("matrix" %in% class(zoo::coredata(xin)))) {
-                return(clean_timeseries(zoo::zoo(
-                    binning(xin,
-                            interpolation_dates = interpolation_dates,
+                xout <- binning(xin,
+                            xout = xout,
                             bin_width = bin_width,
-                            binning_function = binning_function),
-                    order.by = interpolation_dates
-                ),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+                            binning_function = binning_function)
             } else {
-                return(clean_timeseries(PTBoxProxydata::zoo_apply(xin,
-                                                                  function(xx)
-                                                                      binning(xx,
-                                                                              interpolation_dates = interpolation_dates,
-                                                                              bin_width = bin_width,
-                                                                              binning_function = binning_function),
-                                                                  out_index = interpolation_dates),remove_na=remove_na,aggregation=aggregation,aggregation_fun=aggregation_fun))
+                xout <- PTBoxProxydata::zoo_apply(xin,
+                                                  function(xx)
+                                                      binning(xx,
+                                                              xout = xout,
+                                                              bin_width = bin_width,
+                                                              binning_function = binning_function),
+                                                  out_index = xout)
             }
         }
+        if (method == "loess") {
+            if (! ("matrix" %in% class(zoo::coredata(xin)))) {
+                xout <- zoo::zoo(predict(loess(y ~ x,
+                                  data.frame(x = zoo::index(xin), y = zoo::coredata(xin)),
+                                  span = loess_span, degree = 2),
+                            data.frame(x=xout)),
+                    order.by = xout)
+            } else {
+                xout <- PTBoxProxydata::zoo_apply(xin,function(xx)
+                                                             predict(loess(y ~ x,
+                                                                            data.frame(x = zoo::index(xx), y = zoo::coredata(xx)),
+                                                                            span = loess_span, degree = 2),
+                                                                            data.frame(x=xout)),
+                                                             out_index = xout)
+            }
+        }
+        if (method == "bwr25") {
+            if (! ("matrix" %in% class(zoo::coredata(xin)))) {
+                xout <- interp_bwr25(xin,xout)
+            } else {
+                xout <- PTBoxProxydata::zoo_apply(xin,function(xx)
+                                                            interp_bwr25(xx,xout),
+                                                            out_index = xout)
+            }
+        }
+        if (method == "gk") {
+            if (gk_antialiasing == TRUE) {
+                xin <- paleodata_interpolation(xin,
+                                               seq(min(xout)-2*gk_smooth_scale, max(xout)+2*gk_smooth_scale, by=min(diff(xout))/10),
+                                               method="linear",remove_na==TRUE)
+            }
+            if (! ("matrix" %in% class(zoo::coredata(xin)))) {
+                xout <- gkinterp(xin, xout, smooth_scale = gk_smooth_scale, pass = gk_pass)
+            } else {
+                xout <- PTBoxProxydata::zoo_apply(xin,function(xx)
+                                                            gkinterp(xx, xout = xout, smooth_scale = gk_smooth_scale, pass = gk_pass),
+                                                            out_index = xout)
+            }
+        }
+        if (remove_extrapolated_values == TRUE) {
+            xout <- remove_extrapolated_samples(xin,xout,max_dist=max_dist)
+        }
+        xout <- clean_timeseries(xout, remove_na=remove_na, aggregation=aggregation, aggregation_fun=aggregation_fun)
+        return(xout)
     }
 
 #' @export
 paleodata_interpolation.Proxytibble <-
     function(xin,
-             interpolation_type,
-             interpolation_dates,
+             xout,
+             method,
              remove_na = TRUE,
              aggregation = TRUE,
              aggregation_fun = mean,
-             bin_width = mean(diff(interpolation_dates)),
-             binning_function = mean) {
-        if (!interpolation_type %in% c("spline","spectral")) {
-            stop("`interpolation_type` not supported")
+             remove_extrapolated_values = FALSE,
+             max_dist = 5*mean(diff(zoo::index(xout))),
+             lh14_lowpass = 1.2,
+             lh14_length = 5,
+             bin_width = mean(diff(xout)),
+             binning_function = mean,
+             loess_span = 0.25,
+             gk_antialiasing = TRUE,
+             gk_smooth_scale = NULL,
+             gk_pass = 0.5) {
+        if (!method %in% c("linear","nn","spline","lh14","binning","loess","bwr25","gk")) {
+            stop("`method` not supported")
         }
         if (all(class(xin[[PTBoxProxydata::Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
             stop("`paleodata_interpolation` only implemented for `zoo_format == 'zoo'`")
@@ -190,13 +309,21 @@ paleodata_interpolation.Proxytibble <-
             PTBoxProxydata::apply_proxy(
                 xin,
                 fun = paleodata_interpolation.zoo,
-                interpolation_type = interpolation_type,
-                interpolation_dates = interpolation_dates,
+                method = method,
+                xout = xout,
                 remove_na = remove_na,
                 aggregation = aggregation,
                 aggregation_fun = aggregation_fun,
-                bin_width = mean(diff(interpolation_dates)),
-                binning_function = mean
+                remove_extrapolated_values = remove_extrapolated_values,
+                max_dist = max_dist,
+                lh14_lowpass = lh14_lowpass,
+                lh14_length = lh14_length,
+                bin_width = bin_width,
+                binning_function = binning_function,
+                loess_span = loess_span,
+                gk_antialiasing = gk_antialiasing,
+                gk_smooth_scale = gk_smooth_scale,
+                gk_pass = gk_pass
             )
         )
     }
@@ -347,7 +474,7 @@ paleodata_transformation <- function(xin, transformation_type="logit") UseMethod
 paleodata_transformation.zoo <-
     function(xin, transformation_type = "logit") {
         if (!transformation_type %in% c("logit","invlogit","probit","invprobit","sqrt","quadratic","log","exp","quantile","weighted_quantile","nonneg","normalize","standardize","center")) {
-            stop("`interpolation_type` not supported")
+            stop("`method` not supported")
         }
         if (transformation_type == "logit") {
             data_trafo <- VGAM::logitlink(xin, inverse = FALSE)
@@ -517,8 +644,8 @@ paleodata_signal_extraction.Proxytibble <- function(xin,signal_type,signal_compo
 #' @param freq.end Vector containing the start frequencies of the fitting interval(s)
 #' @param target denotes  "raw" or "logsmooth", default "raw"
 #' @param interpolation Logical: should interpolation be applied?
-#' @param interpolation_type Parameters for interpolation (see paleodata_interpolation)
-#' @param interpolation_dates Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.
+#' @param method Parameters for interpolation (see paleodata_interpolation)
+#' @param xout Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.
 #' @param transformation Logical: should transformation be applied?
 #' @param transformation_type Parameters for transformation (see paleodata_transformation)
 #' @param detrend Logical: should time series be linearly detrend before computing the spectrum
@@ -548,8 +675,8 @@ paleodata_varfromspec <-
              freq.end = NULL,
              target = "raw",
              interpolation = TRUE,
-             interpolation_type = "spectral",
-             interpolation_dates = NULL,
+             method = "lh14",
+             xout = NULL,
              transformation = FALSE,
              transformation_type = "normalize",
              detrend = TRUE,
@@ -565,8 +692,8 @@ paleodata_varfromspec.zoo <-
              freq.end = NULL,
              target = "raw",
              interpolation = TRUE,
-             interpolation_type = "spectral",
-             interpolation_dates = NULL,
+             method = "lh14",
+             xout = NULL,
              transformation = FALSE,
              transformation_type = "normalize",
              detrend = TRUE,
@@ -603,8 +730,8 @@ paleodata_varfromspec.zoo <-
 
         xspec <- paleodata_spectrum(xin,
                                   interpolation,
-                                  interpolation_type,
-                                  interpolation_dates,
+                                  method,
+                                  xout,
                                   transformation,
                                   transformation_type,
                                   detrend = detrend,
@@ -626,8 +753,8 @@ paleodata_varfromspec.Proxytibble <- function(xin,
                                           freq.end = NULL,
                                           target = "raw",
                                           interpolation = TRUE,
-                                          interpolation_type = "spectral",
-                                          interpolation_dates = NULL,
+                                          method = "lh14",
+                                          xout = NULL,
                                           transformation = FALSE,
                                           transformation_type = "normalize",
                                           detrend = TRUE,
@@ -643,8 +770,8 @@ paleodata_varfromspec.Proxytibble <- function(xin,
             target = target,
             fun = paleodata_varfromspec.zoo,
             interpolation = interpolation,
-            interpolation_dates = interpolation_dates,
-            interpolation_type = interpolation_type,
+            xout = xout,
+            method = method,
             transformation = transformation,
             transformation_type = transformation_type,
             detrend = detrend,
@@ -662,8 +789,8 @@ paleodata_varfromspec.Proxytibble <- function(xin,
 #' @param freq.end Vector containing the start frequencies of the fitting interval(s)
 #' @param target either "raw" or "logsmooth", default "raw"
 #' @param interpolation Logical: should interpolation be applied?
-#' @param interpolation_type Parameters for interpolation (see paleodata_interpolation)
-#' @param interpolation_dates Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.
+#' @param method Parameters for interpolation (see paleodata_interpolation)
+#' @param xout Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.
 #' @param transformation Logical: should transformation be applied?
 #' @param transformation_type Parameters for transformation (see paleodata_transformation)
 #' @param detrend Logical: should time series be linearly detrend before computing the spectrum
@@ -693,8 +820,8 @@ paleodata_scaling <-
              freq.end = NULL,
              target = "raw",
              interpolation = TRUE,
-             interpolation_type = "spectral",
-             interpolation_dates = NULL,
+             method = "lh14",
+             xout = NULL,
              transformation = FALSE,
              transformation_type = "normalize",
              detrend = TRUE,
@@ -710,8 +837,8 @@ paleodata_scaling.zoo <-
              freq.end = NULL,
              target = "raw",
              interpolation = TRUE,
-             interpolation_type = "spectral",
-             interpolation_dates = NULL,
+             method = "lh14",
+             xout = NULL,
              transformation = FALSE,
              transformation_type = "normalize",
              detrend = TRUE,
@@ -720,8 +847,8 @@ paleodata_scaling.zoo <-
 
         xin <- paleodata_spectrum(xin,
                                  interpolation,
-                                 interpolation_type,
-                                 interpolation_dates,
+                                 method,
+                                 xout,
                                  transformation,
                                  transformation_type,
                                  detrend = detrend,
@@ -739,8 +866,8 @@ paleodata_scaling.Proxytibble <- function(xin,
                                           freq.end = NULL,
                                           target = "raw",
                                           interpolation = TRUE,
-                                          interpolation_type = "spectral",
-                                          interpolation_dates = NULL,
+                                          method = "lh14",
+                                          xout = NULL,
                                           transformation = FALSE,
                                           transformation_type = "normalize",
                                           detrend = TRUE,
@@ -756,8 +883,8 @@ paleodata_scaling.Proxytibble <- function(xin,
             target = target,
             fun = paleodata_scaling.zoo,
             interpolation = interpolation,
-            interpolation_dates = interpolation_dates,
-            interpolation_type = interpolation_type,
+            xout = xout,
+            method = method,
             transformation = transformation,
             transformation_type = transformation_type,
             detrend = detrend,
@@ -772,8 +899,8 @@ paleodata_scaling.Proxytibble <- function(xin,
 #'
 #' @param xin Proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), xin can be multivariate
 #' @param interpolation Logical: should interpolation be applied?
-#' @param interpolation_type Parameters for interpolation (see paleodata_interpolation)
-#' @param interpolation_dates Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.
+#' @param method Parameters for interpolation (see paleodata_interpolation)
+#' @param xout Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.
 #' @param transformation Logical: should transformation be applied?
 #' @param transformation_type Parameters for transformation (see paleodata_transformation)
 #' @param detrend Logical: should time series be linearly detrend before computing the spectrum
@@ -807,8 +934,8 @@ paleodata_scaling.Proxytibble <- function(xin,
 paleodata_spectrum <-
     function(xin,
              interpolation = TRUE,
-             interpolation_type = "spectral",
-             interpolation_dates = NULL,
+             method = "lh14",
+             xout = NULL,
              transformation = FALSE,
              transformation_type = "normalize",
              detrend = TRUE,
@@ -821,19 +948,19 @@ paleodata_spectrum <-
 paleodata_spectrum.zoo <-
     function(xin,
              interpolation = TRUE,
-             interpolation_type = "spectral",
-             interpolation_dates = NULL,
+             method = "lh14",
+             xout = NULL,
              transformation = FALSE,
              transformation_type = "normalize",
              detrend = TRUE,
              df_log = 0.05,
              bLog = FALSE) {
-        if(is.null(interpolation_dates)){
-            interpolation_dates = seq(from = zoo::index(xin)[1], zoo::index(xin)[length(zoo::index(xin))],
+        if(is.null(xout)){
+            xout = seq(from = zoo::index(xin)[1], zoo::index(xin)[length(zoo::index(xin))],
                                   by = mean(diff(zoo::index(xin))))
             }
         if (interpolation == TRUE) {
-            xin <- paleodata_interpolation(xin, interpolation_type, interpolation_dates)
+            xin <- paleodata_interpolation(xin, method, xout)
         }
         if (transformation == TRUE) {
             xin <- paleodata_transformation(xin, transformation_type)
@@ -860,8 +987,8 @@ paleodata_spectrum.zoo <-
 #' @export
 paleodata_spectrum.Proxytibble <- function(xin,
                                             interpolation = TRUE,
-                                            interpolation_type = "spectral",
-                                            interpolation_dates = NULL,
+                                            method = "lh14",
+                                            xout = NULL,
                                             transformation = FALSE,
                                             transformation_type = "normalize",
                                             detrend = TRUE,
@@ -874,8 +1001,8 @@ paleodata_spectrum.Proxytibble <- function(xin,
             xin,
             fun = paleodata_spectrum.zoo,
             interpolation = interpolation,
-            interpolation_dates = interpolation_dates,
-            interpolation_type = interpolation_type,
+            xout = xout,
+            method = method,
             transformation = transformation,
             transformation_type = transformation_type,
             detrend = detrend,
@@ -1065,8 +1192,8 @@ find_max_window.Proxytibble <- function(xin,t_min=min(zoo::index(xin)),t_max=max
 #' @param detr_scale Parameters for filtering (see paleodata_filtering)
 #' @param smooth_scale Parameters for filtering (see paleodata_filtering)
 #' @param interpolation Logical: should interpolation be applied?
-#' @param interpolation_type Parameters for interpolation (see paleodata_interpolation)
-#' @param interpolation_dates Parameters for interpolation (see paleodata_interpolation)
+#' @param method Parameters for interpolation (see paleodata_interpolation)
+#' @param xout Parameters for interpolation (see paleodata_interpolation)
 #' @param windowing Logical: should restriction to time window be applied?
 #' @param start_date Parameters for windowing (see paleodata_windowing)
 #' @param end_date Parameters for windowing (see paleodata_windowing)
@@ -1086,7 +1213,7 @@ find_max_window.Proxytibble <- function(xin,t_min=min(zoo::index(xin)),t_max=max
 #' icecoredata <- load_set(mng,'icecore_testset',zoo_format = 'zoo')
 #' # Step-by-step processing of ice core data: 1) Bandpass filter, 2) Interpolate to common time axis, 3) Restrict to 30-60ka BP, 4) Normalize, 5) Compute 1. PC
 #' icecoredata_processed <- paleodata_processing(icecoredata, filtering = TRUE, filter_type = "bandpass", filter_scales = data.frame(lower=1000, upper=10000),
-#'                                                            interpolation = TRUE, interpolation_type = "spectral", interpolation_dates = seq(20000,70000,by=100),
+#'                                                            interpolation = TRUE, method = "lh14", xout = seq(20000,70000,by=100),
 #'                                                            windowing = TRUE, start_date = 30000, end_date = 60000,
 #'                                                            transformation = TRUE, transformation_type = "normalize",
 #'                                                            signal_extraction = TRUE, signal_type = "pca", signal_components = 1)
@@ -1114,8 +1241,8 @@ paleodata_processing <-
              detr_scale = NULL,
              smooth_scale = NULL,
              interpolation = FALSE,
-             interpolation_type = NULL,
-             interpolation_dates = NULL,
+             method = NULL,
+             xout = NULL,
              windowing = FALSE,
              start_date = NULL,
              end_date = NULL,
@@ -1128,7 +1255,7 @@ paleodata_processing <-
 #' @export
 paleodata_processing.zoo <- function(xin,
                                  filtering=FALSE,filter_type=NULL,filter_scales=NULL,detr_scale=NULL,smooth_scale=NULL,interpolation=FALSE,
-                                 interpolation_type=NULL,interpolation_dates=NULL,windowing=FALSE,start_date=NULL,end_date=NULL,
+                                 method=NULL,xout=NULL,windowing=FALSE,start_date=NULL,end_date=NULL,
                                  transformation=FALSE,transformation_type=NULL,signal_extraction=FALSE,signal_type=NULL,signal_components=NA) {
     # Filtering
     if (filtering == TRUE) {
@@ -1136,7 +1263,7 @@ paleodata_processing.zoo <- function(xin,
     }
     # Interpolation
     if (interpolation == TRUE) {
-        xin <- paleodata_interpolation(xin,interpolation_type,interpolation_dates)
+        xin <- paleodata_interpolation(xin,method,xout)
     }
     # Time restriction (windowing)
     if (windowing == TRUE) {
@@ -1162,8 +1289,8 @@ paleodata_processing.Proxytibble <- function(xin,
                                              detr_scale = NULL,
                                              smooth_scale = NULL,
                                              interpolation = FALSE,
-                                             interpolation_type = NULL,
-                                             interpolation_dates = NULL,
+                                             method = NULL,
+                                             xout = NULL,
                                              windowing = FALSE,
                                              start_date = NULL,
                                              end_date = NULL,
@@ -1184,8 +1311,8 @@ paleodata_processing.Proxytibble <- function(xin,
             detr_scale = detr_scale,
             smooth_scale = smooth_scale,
             interpolation = interpolation,
-            interpolation_type = interpolation_type,
-            interpolation_dates = interpolation_dates,
+            method = method,
+            xout = xout,
             windowing = windowing,
             start_date = start_date,
             end_date = end_date,
@@ -1210,8 +1337,8 @@ paleodata_processing.Proxytibble <- function(xin,
 #' @param detr_scale Vector of parameters for filtering (see paleodata_filtering)
 #' @param smooth_scale Vector of parameters for filtering (see paleodata_filtering)
 #' @param interpolation Vector of logicals: should interpolation be applied?
-#' @param interpolation_type Vector of parameters for interpolation (see paleodata_interpolation)
-#' @param interpolation_dates Vector of parameters for interpolation (see paleodata_interpolation)
+#' @param method Vector of parameters for interpolation (see paleodata_interpolation)
+#' @param xout Vector of parameters for interpolation (see paleodata_interpolation)
 #' @param windowing Vector of logicals: should restriction to time window be applied?
 #' @param start_date Vector of parameters for windowing (see paleodata_windowing)
 #' @param end_date Vector of parameters for windowing (see paleodata_windowing)
@@ -1232,7 +1359,7 @@ paleodata_processing.Proxytibble <- function(xin,
 #' # Step-by-step processing of ice core data in multiple different forms (here, smooting, detrending, and bandpass filtering is applied at the same time): 1) Smooth / Detrend / Bandpass filter, 2) Interpolate to common time axis, 3) Restrict to 30-60ka BP, 4) Normalize, 5) Compute 1. PC
 #' icecoredata_processed <- paleodata_multiprocessing(xin = icecoredata$proxy_data[[1]], processing_name = c("Smoothing","Detrending","Bandpass filtering"),
 #'                                                            filtering = rep(TRUE,times=3), filter_type = c("smooth","detrend","bandpass"), detr_scale = rep(1000,times=3), smooth_scale = rep(10000,times=3), filter_scales = data.frame(lower=rep(1000,times=3), upper=rep(10000,times=3)),
-#'                                                            interpolation = rep(TRUE,times=3), interpolation_type = rep("spectral",times=3), interpolation_dates = list(seq(20000,70000,by=100),seq(20000,70000,by=100),seq(20000,70000,by=100)),
+#'                                                            interpolation = rep(TRUE,times=3), method = rep("lh14",times=3), xout = list(seq(20000,70000,by=100),seq(20000,70000,by=100),seq(20000,70000,by=100)),
 #'                                                            windowing = rep(TRUE,times=3), start_date = rep(30000,times=3), end_date = rep(60000,times=3),
 #'                                                            transformation = rep(TRUE,times=3), transformation_type = rep("normalize",times=3),
 #'                                                            signal_extraction = rep(TRUE,times=3), signal_type = rep("pca",times=3), signal_components = rep(1,times=3))
@@ -1263,8 +1390,8 @@ paleodata_multiprocessing <-
              detr_scale = NULL,
              smooth_scale = NULL,
              interpolation = rep(FALSE, times = length(processing_name)),
-             interpolation_type = NULL,
-             interpolation_dates = NULL,
+             method = NULL,
+             xout = NULL,
              windowing = rep(FALSE, times = length(processing_name)),
              start_date = NULL,
              end_date = NULL,
@@ -1277,8 +1404,8 @@ paleodata_multiprocessing <-
 #' @export
 paleodata_multiprocessing.zoo <- function(xin,processing_name,filtering=rep(FALSE,times=length(processing_name)),
                                       filter_type=NULL,filter_scales=NULL,detr_scale=NULL,smooth_scale=NULL,
-                                      interpolation=rep(FALSE,times=length(processing_name)),interpolation_type=NULL,
-                                      interpolation_dates=NULL,windowing=rep(FALSE,times=length(processing_name)),start_date=NULL,
+                                      interpolation=rep(FALSE,times=length(processing_name)),method=NULL,
+                                      xout=NULL,windowing=rep(FALSE,times=length(processing_name)),start_date=NULL,
                                       end_date=NULL,transformation=rep(FALSE,times=length(processing_name)),transformation_type=NULL,
                                       signal_extraction=rep(FALSE,times=length(processing_name)),signal_type=NULL,signal_components=NA) {
     data_processings <- list()
@@ -1287,7 +1414,7 @@ paleodata_multiprocessing.zoo <- function(xin,processing_name,filtering=rep(FALS
         data_processings[[i]]$data <- paleodata_processing.zoo(xin,filtering=filtering[i],filter_type=filter_type[i],
                                                            filter_scales=filter_scales[i,],detr_scale=detr_scale[i],
                                                            smooth_scale=smooth_scale[i],interpolation=interpolation[i],
-                                                           interpolation_type=interpolation_type[i],interpolation_dates=interpolation_dates[[i]],
+                                                           method=method[i],xout=xout[[i]],
                                                            windowing=windowing[i],start_date=start_date[i],end_date=end_date[i],
                                                            transformation=transformation[i],transformation_type=transformation_type[i],
                                                            signal_extraction=signal_extraction[i],signal_type=signal_type[i],

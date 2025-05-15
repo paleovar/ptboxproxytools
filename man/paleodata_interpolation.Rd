@@ -6,21 +6,29 @@
 \usage{
 paleodata_interpolation(
   xin,
-  interpolation_type,
-  interpolation_dates,
+  xout,
+  method,
   remove_na = TRUE,
   aggregation = TRUE,
   aggregation_fun = mean,
-  bin_width = mean(diff(interpolation_dates)),
-  binning_function = mean
+  remove_extrapolated_values = FALSE,
+  max_dist = 5 * mean(diff(zoo::index(xout))),
+  lh14_lowpass = 1.2,
+  lh14_length = 5,
+  bin_width = mean(diff(xout)),
+  binning_function = mean,
+  loess_span = 0.25,
+  gk_antialiasing = TRUE,
+  gk_smooth_scale = NULL,
+  gk_pass = 0.5
 )
 }
 \arguments{
 \item{xin}{Proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), xin can be multivariate}
 
-\item{interpolation_type}{Type of interpolation, either 'spline' (spline interpolation), or 'spectral' (using the interpolation method from Laepple and Huybers 2014, Rehfeld et al. 2018, implemented in 'PaleoSpec')}
+\item{xout}{Dates of the interpolated time series}
 
-\item{interpolation_dates}{Dates of the interpolated time series}
+\item{method}{Type of interpolation, either 'linear' (piecewise linear interpolation), 'nn' (nearest neighbor), spline' (spline interpolation), 'lh14' (using the interpolation method from Laepple and Huybers 2014, Rehfeld et al. 2018, implemented in 'PaleoSpec'), 'binning' (aggregation in equally-sized bins), 'loess' (loess interpolation), 'bwr25' (binning with initial linear interpolation ot high resolution to mitigate aliasing, from Baudouin et al. 2025), 'gk' (Gaussian kernel smoothing and interpolation)}
 
 \item{remove_na}{Flag if NAs should be removed after the interpolation}
 
@@ -28,9 +36,21 @@ paleodata_interpolation(
 
 \item{aggregation_fun}{Function for merging non-unique timesteps}
 
+\item{lh14_lowpass}{Scaling factor for the lowpass frequency. Default is 1.2 (same as in PaleoSpec::MakeEquidistant)}
+
+\item{lh14_length}{Scaling factor for the Length of the filter. Default is 5 (same as in PaleoSpec::MakeEquidistant)}
+
 \item{bin_width}{Width of bins if interpolation method is "binning". Defaults to the mean sample resolution (no variable bin sizes are supported at the moment)}
 
 \item{binning_function}{How should values within one bin be averaged? Default is "mean"}
+
+\item{loess_span}{"span" parameter in loess fitting, controls degree of smoothing}
+
+\item{gk_antialiasing}{Should linear interpolation to higher resolution be applied prior to smoothing to avoid aliasing. Default is "TRUE"}
+
+\item{gk_smooth_scale}{Smoothing scale of the Gaussian kernel}
+
+\item{gk_pass}{Gain at the smoothing scale. Default is 0.5}
 }
 \value{
 Proxytibble with interpolated proxy data in `zoo::zoo` format or interpolated irregular time series object (`zoo::zoo`)
@@ -48,14 +68,20 @@ icecoredata_interpolated <- paleodata_interpolation(icecoredata,"spline",seq(300
 # Plot datasets
 plot(icecoredata_interpolated$proxy_data[[1]])
 plot(icecoredata_interpolated$proxy_data[[2]])
-# Interpolate to a regular 1000yr resolution between 30ka BP and 60ka BP using interpolation method from PaleoSpec package (named "spectral" because it is optimized for computation of spectral densities)
-edc_data_interpolated <- paleodata_interpolation(icecoredata$proxy_data[[1]],"spectral",seq(30000,60000,by=100))
+# Interpolate to a regular 1000yr resolution between 30ka BP and 60ka BP using interpolation method from PaleoSpec package (named "lh14" after Laepple and Huybers 2014, this method is optimized for computation of spectral densities)
+edc_data_interpolated <- paleodata_interpolation(icecoredata$proxy_data[[1]],"lh14",seq(30000,60000,by=100))
 # Plot zoo data
 plot(edc_data_interpolated)
 
 }
 \seealso{
+\link{optim} (from `stats`) for linear and nn interpolation
+
 \link{spline} (from `stats`) for spline interpolation
 
-\link{MakeEquidistant} (from `PaleoSpec`) for 'spectral' interpolation (optimized for computation of spectral densities from irregular time series)
+\link{MakeEquidistant} (from `PaleoSpec`) for 'lh14' interpolation (optimized for computation of spectral densities from irregular time series)
+
+\link{loess} (from `stats`) for loess interpolation
+
+\link{ksmooth} (from `stats`) for Gaussian kernel interpolation
 }

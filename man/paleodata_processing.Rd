@@ -12,8 +12,8 @@ paleodata_processing(
   detr_scale = NULL,
   smooth_scale = NULL,
   interpolation = FALSE,
-  interpolation_type = NULL,
-  interpolation_dates = NULL,
+  method = NULL,
+  xout = NULL,
   windowing = FALSE,
   start_date = NULL,
   end_date = NULL,
@@ -39,9 +39,9 @@ paleodata_processing(
 
 \item{interpolation}{Logical: should interpolation be applied?}
 
-\item{interpolation_type}{Parameters for interpolation (see paleodata_interpolation)}
+\item{method}{Parameters for interpolation (see paleodata_interpolation)}
 
-\item{interpolation_dates}{Parameters for interpolation (see paleodata_interpolation)}
+\item{xout}{Parameters for interpolation (see paleodata_interpolation)}
 
 \item{windowing}{Logical: should restriction to time window be applied?}
 
@@ -72,7 +72,7 @@ mng <- ProxyDataManager()
 icecoredata <- load_set(mng,'icecore_testset',zoo_format = 'zoo')
 # Step-by-step processing of ice core data: 1) Bandpass filter, 2) Interpolate to common time axis, 3) Restrict to 30-60ka BP, 4) Normalize, 5) Compute 1. PC
 icecoredata_processed <- paleodata_processing(icecoredata, filtering = TRUE, filter_type = "bandpass", filter_scales = data.frame(lower=1000, upper=10000),
-                                                           interpolation = TRUE, interpolation_type = "spectral", interpolation_dates = seq(20000,70000,by=100),
+                                                           interpolation = TRUE, method = "lh14", xout = seq(20000,70000,by=100),
                                                            windowing = TRUE, start_date = 30000, end_date = 60000,
                                                            transformation = TRUE, transformation_type = "normalize",
                                                            signal_extraction = TRUE, signal_type = "pca", signal_components = 1)

@@ -13,8 +13,8 @@ paleodata_multiprocessing(
   detr_scale = NULL,
   smooth_scale = NULL,
   interpolation = rep(FALSE, times = length(processing_name)),
-  interpolation_type = NULL,
-  interpolation_dates = NULL,
+  method = NULL,
+  xout = NULL,
   windowing = rep(FALSE, times = length(processing_name)),
   start_date = NULL,
   end_date = NULL,
@@ -42,9 +42,9 @@ paleodata_multiprocessing(
 
 \item{interpolation}{Vector of logicals: should interpolation be applied?}
 
-\item{interpolation_type}{Vector of parameters for interpolation (see paleodata_interpolation)}
+\item{method}{Vector of parameters for interpolation (see paleodata_interpolation)}
 
-\item{interpolation_dates}{Vector of parameters for interpolation (see paleodata_interpolation)}
+\item{xout}{Vector of parameters for interpolation (see paleodata_interpolation)}
 
 \item{windowing}{Vector of logicals: should restriction to time window be applied?}
 
@@ -76,7 +76,7 @@ icecoredata <- load_set(mng,'icecore_testset',zoo_format = 'zoo')
 # Step-by-step processing of ice core data in multiple different forms (here, smooting, detrending, and bandpass filtering is applied at the same time): 1) Smooth / Detrend / Bandpass filter, 2) Interpolate to common time axis, 3) Restrict to 30-60ka BP, 4) Normalize, 5) Compute 1. PC
 icecoredata_processed <- paleodata_multiprocessing(xin = icecoredata$proxy_data[[1]], processing_name = c("Smoothing","Detrending","Bandpass filtering"),
                                                            filtering = rep(TRUE,times=3), filter_type = c("smooth","detrend","bandpass"), detr_scale = rep(1000,times=3), smooth_scale = rep(10000,times=3), filter_scales = data.frame(lower=rep(1000,times=3), upper=rep(10000,times=3)),
-                                                           interpolation = rep(TRUE,times=3), interpolation_type = rep("spectral",times=3), interpolation_dates = list(seq(20000,70000,by=100),seq(20000,70000,by=100),seq(20000,70000,by=100)),
+                                                           interpolation = rep(TRUE,times=3), method = rep("lh14",times=3), xout = list(seq(20000,70000,by=100),seq(20000,70000,by=100),seq(20000,70000,by=100)),
                                                            windowing = rep(TRUE,times=3), start_date = rep(30000,times=3), end_date = rep(60000,times=3),
                                                            transformation = rep(TRUE,times=3), transformation_type = rep("normalize",times=3),
                                                            signal_extraction = rep(TRUE,times=3), signal_type = rep("pca",times=3), signal_components = rep(1,times=3))

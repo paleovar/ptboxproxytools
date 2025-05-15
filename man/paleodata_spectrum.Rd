@@ -7,8 +7,8 @@
 paleodata_spectrum(
   xin,
   interpolation = TRUE,
-  interpolation_type = "spectral",
-  interpolation_dates = NULL,
+  method = "lh14",
+  xout = NULL,
   transformation = FALSE,
   transformation_type = "normalize",
   detrend = TRUE,
@@ -21,9 +21,9 @@ paleodata_spectrum(
 
 \item{interpolation}{Logical: should interpolation be applied?}
 
-\item{interpolation_type}{Parameters for interpolation (see paleodata_interpolation)}
+\item{method}{Parameters for interpolation (see paleodata_interpolation)}
 
-\item{interpolation_dates}{Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.}
+\item{xout}{Parameters for interpolation (see paleodata_interpolation). If NULL the interpolation is set to the mean temporal resolution of each proxy time series.}
 
 \item{transformation}{Logical: should transformation be applied?}
 
