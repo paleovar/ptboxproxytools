@@ -11,7 +11,7 @@ remove_extrapolated_samples(
 )
 }
 \arguments{
-\item{xin_raw}{Original proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), xin can be multivariate}
+\item{xin_raw}{Original proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), or list of zoo::zoo objects (e.g. from proxytibble$proxy_data) xin can be multivariate}
 
 \item{xin_interp}{Zoo with interpolated values (all timeseries from xin_raw need to be interpolated to the same time axis), xin_interp can have dimension 1 (time), 2 (time x records or sites x time), or 3 (sites x time x records)}
 

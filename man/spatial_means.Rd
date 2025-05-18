@@ -4,7 +4,7 @@
 \alias{spatial_means}
 \title{Calculate spatial mean of a climate data field}
 \usage{
-spatial_means(lon, lat, clim_field)
+spatial_means(lon, lat, clim_field, weighting_field = NULL)
 }
 \arguments{
 \item{lon}{Vector of longitudes}
@@ -12,6 +12,8 @@ spatial_means(lon, lat, clim_field)
 \item{lat}{Vector of latitudes}
 
 \item{clim_field}{Climate data field (with dimension #lon x #lat)}
+
+\item{weighting_field}{Field with additional weights for grid boxes if additional constraints should be included in weights (e.g., fractional land area). Default is NULL}
 }
 \value{
 Number (spatial mean)

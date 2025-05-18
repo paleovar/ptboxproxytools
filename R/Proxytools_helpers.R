@@ -194,6 +194,7 @@ as.numeric.factor <- function(x) {
 #' @param lon Vector of longitudes
 #' @param lat Vector of latitudes
 #' @param clim_field Climate data field (with dimension #lon x #lat)
+#' @param weighting_field Field with additional weights for grid boxes if additional constraints should be included in weights (e.g., fractional land area). Default is NULL
 #'
 #' @return Number (spatial mean)
 #' @export
@@ -208,14 +209,16 @@ as.numeric.factor <- function(x) {
 #' # Print spatial mean
 #' print(clim_mean)
 #'
-spatial_means <- function(lon,lat,clim_field) {
+spatial_means <- function(lon,lat,clim_field,weighting_field=NULL) {
     spatial_weights <- array(0,dim=c(length(lon),length(lat)))
     for (i in 1:length(lat)) {spatial_weights[,i] <- (cos((lat[i]+mean(diff(lat))/2)*pi/180)+cos((lat[i]-mean(diff(lat))/2)*pi/180))/2}
+    if (!is.null(weighting_field)) {
+        spatial_weights <- weighting_field * spatial_weights
+    }
     spatial_weights[which(is.na(clim_field[1:(length(lon)*length(lat))]))] <- NA
     spatial_weights <- spatial_weights/sum(spatial_weights,na.rm=T)
     return(sum(spatial_weights*clim_field,na.rm=T))
 }
-
 
 #' Replicate data vector of zoo object (time axis does not change)
 #'
@@ -351,7 +354,7 @@ gkinterp <- function(xin, xout, smooth_scale, pass = 0.5) {
 
 #' Remove samples in interpolated zoo that are far away from original samples
 #'
-#' @param xin_raw Original proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), xin can be multivariate
+#' @param xin_raw Original proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), or list of zoo::zoo objects (e.g. from proxytibble$proxy_data) xin can be multivariate
 #' @param xin_interp Zoo with interpolated values (all timeseries from xin_raw need to be interpolated to the same time axis), xin_interp can have dimension 1 (time), 2 (time x records or sites x time), or 3 (sites x time x records)
 #' @param max_dist Cutoff distance from nearest raw sample beyond which values in xin_interp are set to NA
 #'
@@ -374,14 +377,26 @@ remove_extrapolated_samples.zoo <- function(xin_raw, xin_interp,max_dist=5*mean(
 }
 #' @export
 remove_extrapolated_samples.Proxytibble <- function(xin_raw, xin_interp,max_dist=5*mean(diff(zoo::index(xin_interp)))) {
-    for (i in 1:dim(proxytibble)[1]) {
+    for (i in 1:dim(xin_raw)[1]) {
         for (j in 1:length(zoo::index(xin_interp))) {
             if (min(abs(zoo::index(xin_raw$proxy_data[[i]]) - zoo::index(xin_interp)[j])) > max_dist) {
                 if (length(dim(xin_interp)) == 2) {
-                    xin_interp[i,j] <- NA
+                    xin_interp[j,i] <- NA
                 } else {
-                    xin_interp[i,j,] <- NA
+                    ### THIS DOESN'T WORK WITH xin_interp AS ZOO (because zoo's can't have more than 2 dimensions)
+                    xin_interp[j,i,] <- NA
                 }
+            }
+        }
+    }
+    return(xin_interp)
+}
+#' @export
+remove_extrapolated_samples.list <- function(xin_raw, xin_interp,max_dist=5*mean(diff(zoo::index(xin_interp)))) {
+    for (i in 1:length(xin_raw)) {
+        for (j in 1:length(zoo::index(xin_interp))) {
+            if (min(abs(zoo::index(xin_raw[[i]]) - zoo::index(xin_interp)[j])) > max_dist) {
+                xin_interp[j,i] <- NA
             }
         }
     }
