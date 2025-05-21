@@ -118,7 +118,7 @@ normalize.zoo <- function(xin, center = TRUE, scale = TRUE) {
             xin <- xin - mean(xin, na.rm = TRUE)
         }
         if (scale == TRUE) {
-            xin <- xin / sd(xin)
+            xin <- xin / sd(xin, na.rm = TRUE)
         }
         return(xin)
     } else {
@@ -128,7 +128,7 @@ normalize.zoo <- function(xin, center = TRUE, scale = TRUE) {
         }
         if (scale == TRUE) {
             xin <- PTBoxProxydata::zoo_applyfix(xin, function(xx)
-                xx / sd(xx))
+                xx / sd(xx, na.rm = TRUE))
         }
         return(xin)
     }
@@ -141,7 +141,7 @@ normalize.Proxyzoo <- function(xin, center = TRUE, scale = TRUE) {
     }
     if (scale == TRUE) {
         xin <- PTBoxProxydata::zoo_applyfix.Proxyzoo(xin, function(xx)
-            xx / sd(xx))
+            xx / sd(xx, na.rm = TRUE))
     }
     return(xin)
 }
@@ -162,7 +162,7 @@ normalize.numeric <- function(xin, center = TRUE, scale = TRUE) {
         xin <- xin - mean(xin, na.rm = TRUE)
     }
     if (scale == TRUE) {
-        xin <- xin / sd(xin)
+        xin <- xin / sd(xin, na.rm = TRUE)
     }
     return(xin)
 }
@@ -172,7 +172,7 @@ normalize.integer <- function(xin, center = TRUE, scale = TRUE) {
         xin <- xin - mean(xin, na.rm = TRUE)
     }
     if (scale == TRUE) {
-        xin <- xin / sd(xin)
+        xin <- xin / sd(xin, na.rm = TRUE)
     }
     return(xin)
 }
