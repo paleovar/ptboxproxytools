@@ -1304,18 +1304,16 @@ site_mean <- function(xin,
         }
     } else {
         # CASE 2: xin_interp (ensembles of interpolated values) is provided from pre-computed interpolation, e.g. Bayesian gamls models which take long to compute for large ensembles of records
-        if ("array" %in% class(xin$proxy_data)) {
-            if (is.null(nr_samples)) {
-                nr_samples <- dim(xin$proxy_data)[3]
-            }
-            if (nr_samples == dim(xin_interp)[3]) {
-                var_at_sites <- xin_interp
+        if (is.null(nr_samples)) {
+            nr_samples <- dim(xin$proxy_data)[3]
+        }
+        if (nr_samples == dim(xin_interp)[3]) {
+            var_at_sites <- xin_interp
+        } else {
+            if (nr_samples < dim(xin_interp)[3]) {
+                var_at_sites <- xin_interp[,,resample(1:dim(xin_interp)[3],size=nr_samples,replace=FALSE)]
             } else {
-                if (nr_samples < dim(xin_interp)[3]) {
-                    var_at_sites <- xin_interp[,,resample(1:dim(xin_interp)[3],size=nr_samples,replace=FALSE)]
-                } else {
-                    var_at_sites <- xin_interp[,,resample(1:dim(xin_interp)[3],size=nr_samples,replace=TRUE)]
-                }
+                var_at_sites <- xin_interp[,,resample(1:dim(xin_interp)[3],size=nr_samples,replace=TRUE)]
             }
         }
     }
