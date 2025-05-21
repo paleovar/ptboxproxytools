@@ -1181,6 +1181,230 @@ find_max_window.Proxytibble <- function(xin,t_min=min(zoo::index(xin)),t_max=max
 }
 
 
+
+#' Constructs stacks of records from a proxytibble (list of proxy records)
+#'
+#' @param xin Input proxy data
+#' @param nr_samples Number of samples
+#' @param lon_min Lon min
+#' @param lon_max Lon max
+#' @param lat_min Lat min
+#' @param lat_max Lat max
+#' @param time Time
+#' @param period_start Start of period
+#' @param period_end End of period
+#' @param sample_interval Sample interval
+#' @param use_complete_records_only Should only records with values at all timesteps be used?
+#' @param restrict_to_window Should maximal window fulfilling quality criteria be used?
+#' @param window_tmin Start of period for window
+#' @param window_tmax End of period for window
+#' @param window_minres Min resolution
+#' @param window_maxstep Maximal time step
+#' @param window_minlength Minimum length of window
+#' @param xin_interp Interpolated values
+#' @param age_uncertainty Method for including age uncertainty
+#' @param age_uncertainty_std Std. for age uncertainty
+#' @param value_uncertainty Method for including proxy uncertainty
+#' @param value_uncertainty_std Std. for proxy uncertainty
+#' @param interpolation_method Interpolation width
+#' @param bin_width Binning width
+#' @param binning_function Binning function
+#' @param site_normalization Should site values be normalized?
+#' @param bootstrapping Use bootstrapping over sites?
+#' @param stacking_method Stacking method
+#' @param gridbox_size Gridbox size for grid-based interpolation methods
+#' @param land_area_only Use land areas only for latitudinal weighting
+#' @param dist_exp Exponent in computing weights with avgdist
+#' @param within_group_method Averaging method within groups
+#' @param group_weights Group weight
+#' @param group_maps List of maps to compute group weights
+#' @param anomalies Should anomalies from time mean be reported for each output sample
+#' @param rescale Should each output sample be rescaled to unit variance
+#'
+#' @returns List with ensemble mean, ensemble quantiles, and ensemble members of stack
+#' @export
+site_mean <- function(xin,
+                      nr_samples=1000,
+                      lon_min=-180,
+                      lon_max=180,
+                      lat_min=-90,
+                      lat_max=90,
+                      time = NULL,
+                      period_start = min(time),
+                      period_end = max(time),
+                      sample_interval = mean(diff(time)),
+                      use_complete_records_only=FALSE,
+                      restrict_to_window=FALSE,
+                      window_tmin = period_start,
+                      window_tmax = period_end,
+                      window_minres = 2500,
+                      window_maxstep = 5000,
+                      window_minlength = (period_end - period_start)/2,
+                      window_maxdistfromsample = 3000,
+                      xin_interp = NULL,
+                      age_uncertainty="white_noise",
+                      age_uncertainty_std=1000,
+                      value_uncertainty="white_noise",
+                      value_uncertainty_std=5,
+                      interpolation_method="binning",
+                      bin_width=sample_interval,
+                      binning_function=mean,
+                      site_normalization=FALSE,
+                      bootstrapping=TRUE,
+                      stacking_method="site_mean",
+                      gridbox_size=c(20,10),
+                      land_area_only=TRUE,
+                      dist_exp=1,
+                      within_group_method="avgdist",
+                      group_weights=NULL,
+                      group_maps=NULL,
+                      anomalies=TRUE,
+                      rescale=FALSE) {
+
+    # Prep: set time axis
+    if (is.null(time)) {
+        time <- seq(period_start,period_end,sample_interval)
+    }
+    # Proxytibble "xin" needs lon, lat, and proxydata (assumed to be either list of zoo's [add proxyzoo later for age ensembles] or array of interpolated values [so far only case of ensembles of interpolated values included, add single member case later])
+    # Steps:
+    # 0) Record selection based on regional limits and record quality
+    tmp_ind <- which(xin$lon >= lon_min & xin$lon <= lon_max & xin$lat >= lat_min & xin$lat <= lat_max)
+    xin <- xin[tmp_ind,]
+    if (!is.null(xin_interp)) {
+        xin_interp <- xin_interp[tmp_ind,,]
+    }
+    if (restrict_to_window == TRUE) {
+        windowed_proxydata <- lapply(xin$proxy_data, find_max_window, t_min = window_tmin,t_max = window_tmax, min_res = window_minres, max_step = window_maxstep, min_length = window_minlength)
+        xin <- xin[which(!is.na(windowed_proxydata)),]
+        if (!is.null(xin_interp)) {
+            xin_interp <- xin_interp[which(!is.na(windowed_proxydata)),,]
+        }
+        windowed_proxydata <- windowed_proxydata[which(!is.na(windowed_proxydata))]
+    }
+    cat(dim(xin)[1]," used for computing curve \n",sep="")
+
+    # 1) Sample age and proxy uncertainties (none, whitenoise, ensemble)
+    # TBD
+
+    # 2) Interpolate (and smooth) to common axis, if no xin_interp is provided
+    # CASE 1: Input data is proxytibble with (raw) proxy records (i.e. not interpolated to common time axis, no prior treatment like smoothing or interpolation is assume)
+    if (is.null(xin_interp)) {
+        # Interpolations methods: binning --> OK, lh14 --> looks good to me except for a few very low res records which might have to be removed, spline --> DON'T USE, PRODUCES TO MANY STRANGE VALUES, High-res linear + Gaussian kernel --> OK, loess --> OK, GAMLS --> !
+        var_at_sites <- array(NA,dim=c(dim(xin)[1],length(time)))
+        for (i in 1:dim(xin)[1]) {
+            # ATTENTION: NEED TO UPDATE THE PALEODATA_INTERPOLATIO FUNCTION WITH extrapolate_dist (set values to NA which are further away from range of record than extrapolate_dist) AND max_dist_from_input_sample (set values to NA which are further away from nearest input time point than max_dist_from_input_sample) PARAMETERS
+            # var_at_sites[i,] <- paleodata_interpolation(xin$proxy_data[[i]],method=interpolation_method,xout=time,extrapolate_dist=sample_interval/2,max_dist_from_input_sample=Inf,remove_na = FALSE, aggregation = FALSE, bin_width = bin_width, binning_function = binning_function)
+            var_at_sites[i,] <- paleodata_interpolation(xin$proxy_data[[i]],
+                                                        xout=time,
+                                                        method=interpolation_method,
+                                                        remove_na = FALSE,
+                                                        aggregation = FALSE,
+                                                        bin_width = bin_width,
+                                                        binning_function = binning_function)
+        }
+    } else {
+        # CASE 2: xin_interp (ensembles of interpolated values) is provided from pre-computed interpolation, e.g. Bayesian gamls models which take long to compute for large ensembles of records
+        if ("array" %in% class(xin$proxy_data)) {
+            if (is.null(nr_samples)) {
+                nr_samples <- dim(xin$proxy_data)[3]
+            }
+            if (nr_samples == dim(xin_interp)[3]) {
+                var_at_sites <- xin_interp
+            } else {
+                if (nr_samples < dim(xin_interp)[3]) {
+                    var_at_sites <- xin_interp[,,resample(1:dim(xin_interp)[3],size=nr_samples,replace=FALSE)]
+                } else {
+                    var_at_sites <- xin_interp[,,resample(1:dim(xin_interp)[3],size=nr_samples,replace=TRUE)]
+                }
+            }
+        }
+    }
+
+    if (restrict_to_window == TRUE) {
+        if (length(dim(var_at_sites)) == 2) {
+            var_at_sites <- t(remove_extrapolated_samples(windowed_proxydata,zoo::zoo(t(var_at_sites),order.by=time),max_dist=window_maxdistfromsample))
+        } else {
+            var_at_sites <- remove_extrapolated_samples(windowed_proxydata,var_at_sites,time,max_dist=window_maxdistfromsample)
+        }
+    }
+    if (use_complete_records_only == TRUE) {
+        window_time <- time[which(time >= window_tmin & time <= window_tmax)]
+        if (length(dim(var_at_sites)) == 2) {
+            ind_complete_records <- which(apply(var_at_sites[,which(time >= window_tmin & time <= window_tmax)], 1, function(x) (length(which(!is.na(x))) == length(window_time))))
+            var_at_sites <- var_at_sites[ind_complete_records,]
+        } else {
+            ind_complete_records <- which(apply(apply(var_at_sites[,which(time >= window_tmin & time <= window_tmax),],1:2,mean), 1, function(x) (length(which(!is.na(x))) == length(window_time))))
+            var_at_sites <- var_at_sites[ind_complete_records,,]
+        }
+        xin <- xin[ind_complete_records,]
+    }
+
+    # 4) Normalize records --> unclear if that is useful, values of records are not directly comparable, but also normalization will lead to major changes even for records without any changes
+    if (site_normalization == TRUE) {
+        if (length(dim(var_at_sites)) == 2) {
+            var_at_sites <- t(apply(var_at_sites,1,normalize))
+        } else {
+            var_at_sites <- aperm(apply(var_at_sites,c(1,3),normalize),c(2,3,1))
+        }
+    }
+
+    # 5) bootstrap over records
+    if (bootstrapping == TRUE) {
+        bootstrap_samples <- sapply(1:nr_samples,function(i) resample(x=1:dim(var_at_sites)[1],replace=TRUE))
+    } else {
+        bootstrap_samples <- sapply(1:nr_samples,function(i) 1:dim(var_at_sites)[1])
+    }
+
+    # 6) Spatial mean (site_mean, avgdist_weighted_mean [based on average distance to other records], gridbox_weighted_mean [10x5°boxes + mean over all boxes with data], gridbox_and_lat_weighted_mean [10x5°boxes + zonal mean + weighted mean over all latitudinal bands])
+    if (stacking_method == "groupweighted" & is.null(group_weights)) {
+        group_weights <- compute_group_weights_from_maps(group_maps = group_maps)
+        group_weights <- group_weights[sort(names(group_weights),index=TRUE)$ix]
+    }
+    if (length(dim(var_at_sites)) == 2) {
+        stack_samples <- sapply(1:nr_samples, function(k) stack_records(site_data = list(var=var_at_sites[bootstrap_samples[,k],], lon=xin$lon[bootstrap_samples[,k]], lat=xin$lat[bootstrap_samples[,k]], group=xin$group[bootstrap_samples[,k]]),
+                                                                        stacking_method = stacking_method,
+                                                                        lon_min = lon_min,
+                                                                        lon_max = lon_max,
+                                                                        lat_min = lat_min,
+                                                                        lat_max = lat_max,
+                                                                        gridbox_size = gridbox_size,
+                                                                        land_area_only=land_area_only,
+                                                                        dist_exp = dist_exp,
+                                                                        within_group_method=within_group_method,
+                                                                        group_weights=group_weights,
+                                                                        group_maps=group_maps))
+    } else {
+        stack_samples <- sapply(1:nr_samples, function(k) stack_records(site_data = list(var=var_at_sites[bootstrap_samples[,k],,k], lon=xin$lon[bootstrap_samples[,k]], lat=xin$lat[bootstrap_samples[,k]], group=xin$group[bootstrap_samples[,k]]),
+                                                                        stacking_method = stacking_method,
+                                                                        lon_min = lon_min,
+                                                                        lon_max = lon_max,
+                                                                        lat_min = lat_min,
+                                                                        lat_max = lat_max,
+                                                                        gridbox_size = gridbox_size,
+                                                                        land_area_only=land_area_only,
+                                                                        dist_exp = dist_exp,
+                                                                        within_group_method=within_group_method,
+                                                                        group_weights=group_weights,
+                                                                        group_maps=group_maps))
+    }
+
+    # 7) Compute summary statistics
+    if (anomalies == TRUE) {
+        stack_samples <- apply(stack_samples,2,normalize,scale=FALSE)
+    }
+    if (rescale == TRUE) {
+        stack_samples <- apply(stack_samples,2,normalize)
+    }
+
+    # 8) Compute summary statistics
+    stack_quantiles <- apply(stack_samples,1,quantile,c(0.05,0.1,0.25,0.5,0.75,0.9,0.95),na.rm=TRUE)
+    stack_means <- apply(stack_samples,1,mean,na.rm=TRUE)
+    stack_included_records <- apply(var_at_sites,2,function(x) length(which(!is.na(x))))
+
+    # Return time, means, quantiles, and samples as list
+    return(list(time=time, means=stack_means, samples=stack_samples, quantiles = stack_quantiles, included_records = stack_included_records))
+}
+
 #' Wrapper function for processing of datasets using various processing methods
 #'
 #' Input data --> filtering --> interpolation --> time restriction (windowing) --> transformation --> signal extraction --> output data

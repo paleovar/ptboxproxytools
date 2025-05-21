@@ -111,7 +111,6 @@ clean_timeseries.Proxytibble <- function(xin,remove_na=TRUE,aggregation=TRUE,agg
 #' plot(monticchiodata_normalized$proxy_data[[1]])
 #'
 normalize <- function(xin,center=TRUE,scale=TRUE) UseMethod('normalize')
-
 #' @export
 normalize.zoo <- function(xin, center = TRUE, scale = TRUE) {
     if (!("matrix" %in% class(zoo::coredata(xin)))) {
@@ -134,7 +133,6 @@ normalize.zoo <- function(xin, center = TRUE, scale = TRUE) {
         return(xin)
     }
 }
-
 #' @export
 normalize.Proxyzoo <- function(xin, center = TRUE, scale = TRUE) {
     if (center == TRUE) {
@@ -147,7 +145,6 @@ normalize.Proxyzoo <- function(xin, center = TRUE, scale = TRUE) {
     }
     return(xin)
 }
-
 #' @export
 normalize.Proxytibble <- function(xin, center = TRUE, scale = TRUE) {
     if (!any(class(xin[[Proxytibble_colnames_proxy_data()]][[1]]) %in% c('zoo', 'Proxyzoo')))
@@ -159,7 +156,26 @@ normalize.Proxytibble <- function(xin, center = TRUE, scale = TRUE) {
         scale = scale
     ))
 }
-
+#' @export
+normalize.numeric <- function(xin, center = TRUE, scale = TRUE) {
+    if (center == TRUE) {
+        xin <- xin - mean(xin, na.rm = TRUE)
+    }
+    if (scale == TRUE) {
+        xin <- xin / sd(xin)
+    }
+    return(xin)
+}
+#' @export
+normalize.integer <- function(xin, center = TRUE, scale = TRUE) {
+    if (center == TRUE) {
+        xin <- xin - mean(xin, na.rm = TRUE)
+    }
+    if (scale == TRUE) {
+        xin <- xin / sd(xin)
+    }
+    return(xin)
+}
 
 #' Remove empty rows (i.e. consisting only of zeros) in a matrix
 #'
@@ -356,14 +372,15 @@ gkinterp <- function(xin, xout, smooth_scale, pass = 0.5) {
 #'
 #' @param xin_raw Original proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), or list of zoo::zoo objects (e.g. from proxytibble$proxy_data) xin can be multivariate
 #' @param xin_interp Zoo with interpolated values (all timeseries from xin_raw need to be interpolated to the same time axis), xin_interp can have dimension 1 (time), 2 (time x records or sites x time), or 3 (sites x time x records)
+#' @param time_interp Time axis of the interpolated values (only needed if xin_interp is not a zoo but an array)
 #' @param max_dist Cutoff distance from nearest raw sample beyond which values in xin_interp are set to NA
 #'
 #' @return zoo of same dimension as xin_interp
 #' @export
 #'
-remove_extrapolated_samples <- function(xin_raw, xin_interp,max_dist=5*mean(diff(zoo::index(xin_interp)))) UseMethod('remove_extrapolated_samples')
+remove_extrapolated_samples <- function(xin_raw, xin_interp, time_interp = NULL, max_dist=5*mean(diff(zoo::index(xin_interp)))) UseMethod('remove_extrapolated_samples')
 #' @export
-remove_extrapolated_samples.zoo <- function(xin_raw, xin_interp,max_dist=5*mean(diff(zoo::index(xin_interp)))) {
+remove_extrapolated_samples.zoo <- function(xin_raw, xin_interp, time_interp = NULL, max_dist=5*mean(diff(zoo::index(xin_interp)))) {
     for (j in 1:length(zoo::index(xin_interp))) {
         if (min(abs(zoo::index(xin_raw) - zoo::index(xin_interp)[j])) > max_dist) {
             if (!("matrix" %in% class(zoo::coredata(xin_interp)))) {
@@ -376,15 +393,22 @@ remove_extrapolated_samples.zoo <- function(xin_raw, xin_interp,max_dist=5*mean(
     return(xin_interp)
 }
 #' @export
-remove_extrapolated_samples.Proxytibble <- function(xin_raw, xin_interp,max_dist=5*mean(diff(zoo::index(xin_interp)))) {
+remove_extrapolated_samples.Proxytibble <- function(xin_raw, xin_interp, time_interp = NULL, max_dist=5*mean(diff(zoo::index(xin_interp)))) {
     for (i in 1:dim(xin_raw)[1]) {
-        for (j in 1:length(zoo::index(xin_interp))) {
-            if (min(abs(zoo::index(xin_raw$proxy_data[[i]]) - zoo::index(xin_interp)[j])) > max_dist) {
-                if (length(dim(xin_interp)) == 2) {
+        if ("zoo" %in% class(xin_interp)) {
+            for (j in 1:length(zoo::index(xin_interp))) {
+                if (min(abs(zoo::index(xin_raw$proxy_data[[i]]) - zoo::index(xin_interp)[j])) > max_dist) {
                     xin_interp[j,i] <- NA
-                } else {
-                    ### THIS DOESN'T WORK WITH xin_interp AS ZOO (because zoo's can't have more than 2 dimensions)
-                    xin_interp[j,i,] <- NA
+                }
+            }
+        } else {
+            for (j in 1:length(time)) {
+                if (min(abs(zoo::index(xin_raw$proxy_data[[i]]) - time[j])) > max_dist) {
+                    if (length(dim(interpolated_samples)) == 2) {
+                        xin_interp[i,j] <- NA
+                    } else {
+                        xin_interp[i,j,] <- NA
+                    }
                 }
             }
         }
@@ -392,11 +416,23 @@ remove_extrapolated_samples.Proxytibble <- function(xin_raw, xin_interp,max_dist
     return(xin_interp)
 }
 #' @export
-remove_extrapolated_samples.list <- function(xin_raw, xin_interp,max_dist=5*mean(diff(zoo::index(xin_interp)))) {
+remove_extrapolated_samples.list <- function(xin_raw, xin_interp, time_interp = NULL, max_dist=5*mean(diff(zoo::index(xin_interp)))) {
     for (i in 1:length(xin_raw)) {
-        for (j in 1:length(zoo::index(xin_interp))) {
-            if (min(abs(zoo::index(xin_raw[[i]]) - zoo::index(xin_interp)[j])) > max_dist) {
-                xin_interp[j,i] <- NA
+        if ("zoo" %in% class(xin_interp)) {
+            for (j in 1:length(zoo::index(xin_interp))) {
+                if (min(abs(zoo::index(xin_raw[[i]]) - zoo::index(xin_interp)[j])) > max_dist) {
+                    xin_interp[j,i] <- NA
+                }
+            }
+        } else {
+            for (j in 1:length(time)) {
+                if (min(abs(zoo::index(xin_raw[[i]]) - time[j])) > max_dist) {
+                    if (length(dim(interpolated_samples)) == 2) {
+                        xin_interp[i,j] <- NA
+                    } else {
+                        xin_interp[i,j,] <- NA
+                    }
+                }
             }
         }
     }
@@ -415,6 +451,105 @@ remove_extrapolated_samples.list <- function(xin_raw, xin_interp,max_dist=5*mean
 resample <- function(x, size=length(x), replace=TRUE, ...) {
     return(x[sample.int(length(x), size=size, replace=replace, ...)])
 }
+
+#' Computes spatial weights for groups based on the relative area covered by them
+#'
+#' @param group_maps Input list with maps for each group
+#'
+#' @returns Named vector with weights for all groups (they only sum up to 1 if all NA grid boxes are filled by exactly one group)
+#' @export
+compute_group_weights_from_maps <- function(group_maps) {
+    return(sapply(group_maps$maps, function(x) spatial_means(lon=group_maps$lon,lat=group_maps$lat,clim_field = x))[sort(names(group_maps$maps),index=TRUE)$ix])
+}
+
+#' Creates (weighted) average of proxy timeseries, using selected method for weighting the records
+#'
+#' @param site_data List with site data (lon, lat, var)
+#' @param stacking_method Stacking method
+#' @param lon_min Lon min
+#' @param lon_max Lon max
+#' @param lat_min Lat min
+#' @param lat_max Lat max
+#' @param gridbox_size Gridbox size for grid-based interpolation methods
+#' @param land_area_only Use land areas only for latitudinal weighting
+#' @param dist_exp Exponent in computing weights with avgdist
+#' @param within_group_method Averaging method within groups
+#' @param group_weights Group weight
+#' @param group_maps List of maps to compute group weights
+#'
+#' @returns Vector wit weighted mean values for each timestep (not a zoo!)
+#' @export
+stack_records <- function(site_data, stacking_method="site_mean",lon_min=-180,lon_max=180,lat_min=-90,lat_max=90,gridbox_size=c(20,10),land_area_only=TRUE,dist_exp=1,within_group_method="avgdist",group_weights=NULL,group_maps=NULL) {
+    if (length(site_data$lon) == 1) {
+        return(site_data$var)
+    }
+    if (stacking_method=="site_mean") {
+        var_stacked <- apply(site_data$var,2,mean,na.rm=TRUE)
+    }
+    if (stacking_method=="gridded_mean" | stacking_method=="lat_weighted_gridded_mean") {
+        # Assign variable to grid for each bootstrap sample
+        lon_seq <- seq(lon_min,lon_max,by=gridbox_size[1])
+        lat_seq <- seq(lat_min,lat_max,by=gridbox_size[2])
+        var_at_gridboxes <- array(NA,dim=c(dim(site_data$var)[2],length(lon_seq)-1,length(lat_seq)-1))
+        for (i in 1:(length(lon_seq)-1)) {
+            for (j in 1:(length(lat_seq)-1)) {
+                ind_tmp <- which(site_data$lon >= lon_seq[i] & site_data$lon < lon_seq[i+1] & site_data$lat >= lat_seq[j] & site_data$lat < lat_seq[j+1])
+                if (!is.null(ind_tmp)) {
+                    var_at_gridboxes[,i,j] <- apply(matrix(site_data$var[ind_tmp,],ncol=dim(site_data$var)[2]),2,mean,na.rm=TRUE)
+                }
+            }
+        }
+        if (stacking_method=="gridded_mean") {
+            var_stacked <- apply(var_at_gridboxes, 1, spatial_means, lon=lon_seq[-length(lon_seq)]+gridbox_size[1]/2, lat=lat_seq[-length(lat_seq)]+gridbox_size[2]/2)
+        } else {
+            var_zonal_mean <- apply(var_at_gridboxes,c(1,3),mean,na.rm=TRUE)
+            lat_seq <- lat_seq[-length(lat_seq)]+gridbox_size[2]/2
+            if (land_area_only == TRUE) {
+                land_area_fractions <- readRDS("land_area.rds")
+                land_area_fractions_interpolated <- c(rep(0,times=length(lat_seq[which(lat_seq <= -60)])), sapply(lat_seq[which(lat_seq > -60)],
+                                                                                                                  function(x) spatial_means(lon = 0,
+                                                                                                                                            lat = land_area_fractions$lat[which(land_area_fractions$lat >= x-gridbox_size[2]/2 & land_area_fractions$lat < x+gridbox_size[2]/2)],
+                                                                                                                                            clim_field = matrix(land_area_fractions$ice_free_land_area_per_lat[which(land_area_fractions$lat >= x-gridbox_size[2]/2 & land_area_fractions$lat < x+gridbox_size[2]/2)],nrow=1))))
+                var_stacked <- apply(var_zonal_mean, 1, spatial_means, lon=0, lat=lat_seq, weighting_field = matrix(land_area_fractions_interpolated,nrow=1))
+            } else {
+                var_stacked <- apply(var_zonal_mean, 1, spatial_means, lon=0, lat=lat_seq)
+            }
+        }
+    }
+    if (stacking_method=="avgdist") {
+        mean_dist <- sapply(1:length(site_data$lon), function(i) mean(geosphere::distGeo(c(site_data$lon[i],site_data$lat[i]),cbind(site_data$lon,site_data$lat)[-i,])/1000))
+        var_stacked <- apply(site_data$var,2,function(x) sum(x[which(!is.na(x))]*mean_dist[which(!is.na(x))]^dist_exp)/sum(mean_dist[which(!is.na(x))]^dist_exp))
+        # This one could be improved by computing mean_dist separately for every timestep based on where data is available
+    }
+    if (stacking_method=="groupweighted") {
+        grouplist <- sort(unique(site_data$group))
+        group_stacks <- array(NA, dim=c(length(grouplist),dim(site_data$var)[2]))
+        for (k in 1:length(grouplist)) {
+            ind_tmp <- which(site_data$group == grouplist[k])
+            group_stacks[k,] <- stack_records(site_data = list(var=site_data$var[ind_tmp,], lon=site_data$lon[ind_tmp], lat=site_data$lat[ind_tmp]),
+                                              stacking_method = within_group_method,
+                                              lon_min = lon_min,
+                                              lon_max = lon_max,
+                                              lat_min = lat_min,
+                                              lat_max = lat_max,
+                                              gridbox_size = gridbox_size,
+                                              land_area_only=land_area_only,
+                                              dist_exp = dist_exp)
+        }
+        if (is.null(group_weights)) {
+            group_weights <- compute_group_weights_from_maps(group_maps = group_maps)
+        }
+        group_weights <- group_weights[sort(names(group_weights),index=TRUE)$ix]
+        # This is to make sure that only groups are included that have at least one member in grouplist (due to bootstrapping, empty groups can occur occasionally)
+        group_weights <- group_weights[which(names(group_weights) %in% grouplist)]
+        group_weights <- group_weights/sum(group_weights)
+        var_stacked <- apply(group_stacks, 2, function(x) sum(x * group_weights))
+    }
+
+    return(var_stacked)
+}
+
+
 
 ### Private helpers ----
 
