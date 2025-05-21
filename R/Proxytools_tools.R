@@ -1305,7 +1305,7 @@ site_mean <- function(xin,
     } else {
         # CASE 2: xin_interp (ensembles of interpolated values) is provided from pre-computed interpolation, e.g. Bayesian gamls models which take long to compute for large ensembles of records
         if (is.null(nr_samples)) {
-            nr_samples <- dim(xin$proxy_data)[3]
+            nr_samples <- dim(xin_interp)[3]
         }
         if (nr_samples == dim(xin_interp)[3]) {
             var_at_sites <- xin_interp
