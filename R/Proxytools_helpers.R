@@ -378,9 +378,9 @@ gkinterp <- function(xin, xout, smooth_scale, pass = 0.5) {
 #' @return zoo of same dimension as xin_interp
 #' @export
 #'
-remove_extrapolated_samples <- function(xin_raw, xin_interp, time_interp = NULL, max_dist=5*mean(diff(zoo::index(xin_interp)))) UseMethod('remove_extrapolated_samples')
+remove_extrapolated_samples <- function(xin_raw, xin_interp, time_interp = NULL, max_dist) UseMethod('remove_extrapolated_samples')
 #' @export
-remove_extrapolated_samples.zoo <- function(xin_raw, xin_interp, time_interp = NULL, max_dist=5*mean(diff(zoo::index(xin_interp)))) {
+remove_extrapolated_samples.zoo <- function(xin_raw, xin_interp, time_interp = NULL, max_dist) {
     for (j in 1:length(zoo::index(xin_interp))) {
         if (min(abs(zoo::index(xin_raw) - zoo::index(xin_interp)[j])) > max_dist) {
             if (!("matrix" %in% class(zoo::coredata(xin_interp)))) {
@@ -393,7 +393,7 @@ remove_extrapolated_samples.zoo <- function(xin_raw, xin_interp, time_interp = N
     return(xin_interp)
 }
 #' @export
-remove_extrapolated_samples.Proxytibble <- function(xin_raw, xin_interp, time_interp = NULL, max_dist=5*mean(diff(zoo::index(xin_interp)))) {
+remove_extrapolated_samples.Proxytibble <- function(xin_raw, xin_interp, time_interp = NULL, max_dist) {
     for (i in 1:dim(xin_raw)[1]) {
         if ("zoo" %in% class(xin_interp)) {
             for (j in 1:length(zoo::index(xin_interp))) {
@@ -416,7 +416,7 @@ remove_extrapolated_samples.Proxytibble <- function(xin_raw, xin_interp, time_in
     return(xin_interp)
 }
 #' @export
-remove_extrapolated_samples.list <- function(xin_raw, xin_interp, time_interp = NULL, max_dist=5*mean(diff(zoo::index(xin_interp)))) {
+remove_extrapolated_samples.list <- function(xin_raw, xin_interp, time_interp = NULL, max_dist) {
     for (i in 1:length(xin_raw)) {
         if ("zoo" %in% class(xin_interp)) {
             for (j in 1:length(zoo::index(xin_interp))) {

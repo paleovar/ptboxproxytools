@@ -4,12 +4,7 @@
 \alias{remove_extrapolated_samples}
 \title{Remove samples in interpolated zoo that are far away from original samples}
 \usage{
-remove_extrapolated_samples(
-  xin_raw,
-  xin_interp,
-  time_interp = NULL,
-  max_dist = 5 * mean(diff(zoo::index(xin_interp)))
-)
+remove_extrapolated_samples(xin_raw, xin_interp, time_interp = NULL, max_dist)
 }
 \arguments{
 \item{xin_raw}{Original proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), or list of zoo::zoo objects (e.g. from proxytibble$proxy_data) xin can be multivariate}
