@@ -404,7 +404,7 @@ remove_extrapolated_samples.Proxytibble <- function(xin_raw, xin_interp, time_in
         } else {
             for (j in 1:length(time)) {
                 if (min(abs(zoo::index(xin_raw$proxy_data[[i]]) - time[j])) > max_dist) {
-                    if (length(dim(interpolated_samples)) == 2) {
+                    if (length(dim(xin_interp)) == 2) {
                         xin_interp[i,j] <- NA
                     } else {
                         xin_interp[i,j,] <- NA
@@ -427,7 +427,7 @@ remove_extrapolated_samples.list <- function(xin_raw, xin_interp, time_interp = 
         } else {
             for (j in 1:length(time)) {
                 if (min(abs(zoo::index(xin_raw[[i]]) - time[j])) > max_dist) {
-                    if (length(dim(interpolated_samples)) == 2) {
+                    if (length(dim(xin_interp)) == 2) {
                         xin_interp[i,j] <- NA
                     } else {
                         xin_interp[i,j,] <- NA
