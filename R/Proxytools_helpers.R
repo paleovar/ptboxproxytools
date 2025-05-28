@@ -560,7 +560,7 @@ stack_records <- function(site_data, stacking_method="site_mean",lon_min=-180,lo
 #' @param dt Sampling rate for estimating persistence of the timeseries
 #' @param continuity logical: if true, a continuity correction is used for and Spearman correlation when not computed exactly.
 #'
-#' @returns
+#' @returns list with same parameters as `stats::cor.test`
 #' @export
 #'
 #' @seealso
@@ -691,7 +691,7 @@ average_within_and_between_sites <- function(data, site_names) {
 #' @param var_estimate Point estimate of the variance
 #' @param dof Degrees of freedom
 #'
-#' @returns
+#' @returns Samples from the chi-square distribution of the variance estimator
 #' @export
 sample_var_uncertainty <- function(nr_samples, var_estimate, dof) {
     return(var_estimate * dof / rchisq(nr_samples, dof) )

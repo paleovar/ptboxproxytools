@@ -1794,8 +1794,6 @@ multi_tsc_and_period_dep_var <- function(xin,period_starts,period_ends,tsc_lows,
 #'
 #' @returns Vector (univariate zoo) of matrix (multivariate zoo) with variance samples
 #' @export
-#'
-#' @examples
 tsc_and_period_dep_var_samples <- function(xin,period_start,period_end,tsc_low,tsc_up,nr_samples,detrend=FALSE) {
     if (!("matrix" %in% class(zoo::coredata(xin)))) {
         ### Is there an error in the computation of the ci? I think it should be var.in * (var.dof) / qchisq(c(1 - pval/2), var.dof) instead of var.in * qchisq(c(1 - pval/2), var.dof)/(var.dof)

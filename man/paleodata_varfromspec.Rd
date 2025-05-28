@@ -2,7 +2,9 @@
 % Please edit documentation in R/Proxytools_tools.R
 \name{paleodata_varfromspec}
 \alias{paleodata_varfromspec}
-\title{Variance computation by integration of the spectrum, based on PaleoSpec::GetVarFromSpectra()}
+\title{Variance computation by integration of the spectrum, based on PaleoSpec::GetVarFromSpectra()
+DEPRICATED --> Use `tsc_and_period_dep_var` instead
+This version is a reimplementation based on `PaleoSpec::GetVarFromSpectra`, which is no longer needed}
 \usage{
 paleodata_varfromspec(
   xin,
@@ -49,6 +51,8 @@ List with estimated variance
 }
 \description{
 Variance computation by integration of the spectrum, based on PaleoSpec::GetVarFromSpectra()
+DEPRICATED --> Use `tsc_and_period_dep_var` instead
+This version is a reimplementation based on `PaleoSpec::GetVarFromSpectra`, which is no longer needed
 }
 \examples{
 # Load ice core example data
