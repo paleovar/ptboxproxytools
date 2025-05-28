@@ -549,6 +549,153 @@ stack_records <- function(site_data, stacking_method="site_mean",lon_min=-180,lo
     return(var_stacked)
 }
 
+#' Compute Pearson / Spearman correlations with adjusted estimates for CIs / p-values that use effective degrees of freedom (computed from autocorrelation estimates with nest) instead of iid assumption
+#' Useful for computing correlations of auto-correlated timeseries that share the same time axis
+#'
+#' @param xin Input vector
+#' @param yin Input vector
+#' @param alternative Type of null hypothesis
+#' @param method Pearson of spearman correlation
+#' @param conf.level confidence level for the returned confidence interval. Currently only used for the Pearson product moment correlation coefficient if there are at least 4 complete pairs of observations.
+#' @param dt Sampling rate for estimating persistence of the timeseries
+#' @param continuity logical: if true, a continuity correction is used for and Spearman correlation when not computed exactly.
+#'
+#' @returns
+#' @export
+#'
+#' @seealso
+#' \link{cor.test} (from `stats`) for version with independent samples
+#' \link{nexcf} (from `nest`) for non-pairwise correlation estimation method which uses the same formula to estimate the dof
+#'
+cor_test_effdof <- function (xin, yin, alternative = c("two.sided", "less", "greater"), method = c("pearson", "spearman"), conf.level = 0.95, dt = NULL, continuity = FALSE) {
+    alternative <- match.arg(alternative)
+    method <- match.arg(method)
+    DNAME <- paste(deparse1(substitute(xin)), "and", deparse1(substitute(y)))
+    if (!is.numeric(coredata(xin)))
+        stop("'xin' must be a numeric vector")
+    if (!is.numeric(coredata(yin)))
+        stop("'yin' must be a numeric vector")
+    if (length(xin) != length(yin))
+        stop("'xin' and 'yin' must have the same length")
+    OK <- complete.cases(xin, yin)
+    xin <- xin[OK]
+    yin <- yin[OK]
+    n <- length(xin)
+    NVAL <- 0
+    conf.int <- FALSE
+    # Compute effective dof following the nest methodology
+    dtx = mean(diff(index(xin)))
+    dty = mean(diff(index(yin)))
+    if (is.null(dt))
+        dt = max(dtx, dty)
+    if (dt < max(dtx, dty)) {
+        warning("Chosen timescale is below the sampling rate of the time series")
+    }
+    nx = length(index(xin))
+    ny = length(index(yin))
+    Rx <- range(index(xin))[2] - range(index(xin))[1]
+    Ry <- range(index(yin))[2] - range(index(yin))[1]
+    taux <- nest::tauest(xin, deltas = dt)
+    tauy <- nest::tauest(yin, deltas = dt)
+    neff <- min(max(Rx/taux, Ry/tauy, na.rm = TRUE), max(nx, ny))
+    if (method == "pearson") {
+        if (n < 3L)
+            stop("not enough finite observations")
+        method <- "Pearson's product-moment correlation"
+        names(NVAL) <- "correlation"
+        r <- cor(xin, yin)
+        # Follow cor.test from here on but changing the df value
+        df <- neff - 2L
+        ESTIMATE <- c(cor = r)
+        PARAMETER <- c(df = df)
+        STATISTIC <- c(t = sqrt(df) * r/sqrt(1 - r^2))
+        if (n > 3) {
+            if (!missing(conf.level) && (length(conf.level) !=
+                                         1 || !is.finite(conf.level) || conf.level < 0 ||
+                                         conf.level > 1))
+                stop("'conf.level' must be a single number between 0 and 1")
+            conf.int <- TRUE
+            z <- atanh(r)
+            sigma <- 1/sqrt(neff - 3)
+            cint <- switch(alternative, less = c(-Inf, z + sigma *
+                                                     qnorm(conf.level)), greater = c(z - sigma * qnorm(conf.level),
+                                                                                     Inf), two.sided = z + c(-1, 1) * sigma * qnorm((1 +
+                                                                                                                                         conf.level)/2))
+            cint <- tanh(cint)
+            attr(cint, "conf.level") <- conf.level
+        }
+        PVAL <- switch(alternative, less = pt(STATISTIC, df),
+                       greater = pt(STATISTIC, df, lower.tail = FALSE),
+                       two.sided = 2 * min(pt(STATISTIC, df), pt(STATISTIC,
+                                                                 df, lower.tail = FALSE)))
+    }
+    else {
+        if (n < 2)
+            stop("not enough finite observations")
+        PARAMETER <- NULL
+        TIES <- (min(length(unique(xin)), length(unique(yin))) <
+                     n)
+        method <- "Spearman's rank correlation rho"
+        xin <- coredata(xin)
+        yin <- coredata(yin)
+        names(NVAL) <- "rho"
+        r <- cor(rank(xin), rank(yin))
+        ESTIMATE <- c(rho = r)
+        if (!is.finite(ESTIMATE)) {
+            ESTIMATE[] <- NA
+            STATISTIC <- c(S = NA)
+            PVAL <- NA
+        }
+        else {
+            pspearman <- function(q, n, lower.tail = TRUE) {
+                den <- (n * (n^2 - 1))/6
+                if (continuity)
+                    den <- den + 1
+                r <- 1 - q/den
+                pt(r/sqrt((1 - r^2)/(n - 2)), df = n - 2,
+                   lower.tail = !lower.tail)
+            }
+            q <- (neff^3 - neff) * (1 - r)/6
+            STATISTIC <- c(S = q)
+            PVAL <- switch(alternative, two.sided = {
+                p <- if (q > (neff^3 - neff)/6) pspearman(q, neff, lower.tail = FALSE) else pspearman(q, neff, lower.tail = TRUE)
+                min(2 * p, 1)
+            }, greater = pspearman(q, neff, lower.tail = TRUE),
+            less = pspearman(q, neff, lower.tail = FALSE))
+        }
+    }
+    RVAL <- list(statistic = STATISTIC, parameter = PARAMETER,
+                 p.value = as.numeric(PVAL), estimate = ESTIMATE, null.value = NVAL,
+                 alternative = alternative, method = method, data.name = DNAME)
+    if (conf.int)
+        RVAL <- c(RVAL, list(conf.int = cint))
+    class(RVAL) <- "htest"
+    RVAL
+}
+
+
+#' Average values first from same sites and then between sites
+#'
+#' @param data Vector with values
+#' @param site_names Site names of each vector element
+#'
+#' @returns Average values
+#' @export
+average_within_and_between_sites <- function(data, site_names) {
+    return(mean(sapply(unique(site_names), function(x) mean(data[which(site_names == x)],na.rm=TRUE)),na.rm=TRUE))
+}
+
+#' Sample from asymptotic chi-square distribution of variance estimator (using sample variance and dof)
+#'
+#' @param nr_samples Number of samples
+#' @param var_estimate Point estimate of the variance
+#' @param dof Degrees of freedom
+#'
+#' @returns
+#' @export
+sample_var_uncertainty <- function(nr_samples, var_estimate, dof) {
+    return(var_estimate * dof / rchisq(nr_samples, dof) )
+}
 
 
 ### Private helpers ----

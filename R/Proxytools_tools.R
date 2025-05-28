@@ -637,7 +637,26 @@ paleodata_signal_extraction.Proxytibble <- function(xin,signal_type,signal_compo
     )
 }
 
+#' Wrapper for extracting signals for specific periods and time scales
+#'
+#' @param xin Input zoo
+#' @param period_start Start of period of interest
+#' @param period_end End of period of interest
+#' @param filter_type Type of timescale filtering
+#' @param tsc_low Upper filtering timescale
+#' @param tsc_up Lower filtering timescale
+#' @param signal_type Signal type
+#'
+#' @returns Zoo with desired signal
+#' @export
+tsc_and_period_dep_signal_extraction <- function(xin,period_start,period_end,filter_type,tsc_low,tsc_up,signal_type) {
+    xout <- PTBoxProxytools::normalize(PTBoxProxytools::paleodata_signal_extraction(PTBoxProxytools::paleodata_windowing(PTBoxProxytools::paleodata_filtering(xin,filter_type=filter_type,smooth_scale = tsc_low, detr_scale = tsc_up, filter_scales = data.frame(lower=tsc_low,upper=tsc_up)),period_start,period_end),signal_type=signal_type))
+    return(xout)
+}
+
 #' Variance computation by integration of the spectrum, based on PaleoSpec::GetVarFromSpectra()
+#' DEPRICATED --> Use `tsc_and_period_dep_var` instead
+#' This version is a reimplementation based on `PaleoSpec::GetVarFromSpectra`, which is no longer needed
 #'
 #' @param xin Proxytibble with proxy data in `zoo::zoo` format, or irregular time series object (`zoo::zoo`), xin can be multivariate
 #' @param freq.start Vector containing the start frequencies of the fitting interval(s)
@@ -1099,6 +1118,22 @@ paleodata_explained_variance.Proxytibble <- function(xin,signal_type="pca",signa
     )
 }
 
+#' Wrapper for computing explained variance of a signal for specific periods and time scales
+#'
+#' @param xin Input zoo
+#' @param period_start Start of period of interest
+#' @param period_end End of period of interest
+#' @param filter_type Type of timescale filtering
+#' @param tsc_low Upper filtering timescale
+#' @param tsc_up Lower filtering timescale
+#' @param signal_type Signal type
+#'
+#' @returns Zoo with desired signal
+#' @export
+tsc_and_period_dep_signal_explvar <- function(xin,period_start,period_end,filter_type,tsc_low,tsc_up,signal_type,reference_signal=stats::prcomp(xin)$x[, 1]) {
+    xout <- PTBoxProxytools::paleodata_explained_variance(PTBoxProxytools::paleodata_windowing(PTBoxProxytools::paleodata_filtering(xin,filter_type=filter_type,smooth_scale = tsc_low, detr_scale = tsc_up, filter_scales = data.frame(lower=tsc_low,upper=tsc_up)),period_start,period_end),signal_type=signal_type,reference_signal=reference_signal)
+    return(xout)
+}
 
 #' Extract maximal window
 #'
@@ -1649,3 +1684,240 @@ paleodata_multiprocessing.zoo <- function(xin,processing_name,filtering=rep(FALS
     }
     return(data_processings)
 }
+
+
+# --------------- Timescale-dependent variability estimation -------------
+
+#' Wrapper to compute frequency-dependent variance from logsmoothed spectra (based on `PaleoSpec::GetVarFromSpectra`)
+#' SHOULD NOT BE USED FOR COMPUTING dof, ONLY var ESTIMATES SEEM REASONABLE
+#' DEPRICATED --> Use `tsc_and_period_dep_var` instead, which provides point estimates and confidence intervals
+# Note that dof in PaleoSpec are slightly different from dof in nest, and because PaleoSpec doesn't provide ci's, rather use nest function tsc_dep_var instead
+#'
+#' @param xin Input zoo
+#' @param freq.start Lower frequency limit
+#' @param freq.end Upper frequency limit
+#' @param detrend Should linear detrending be applied before computing the spectra from which the timescales dependent variance is deduced
+#' @param df_log Width of the log-smoother in log units
+#' @param bLog TRUE: average in the log space of the power, FALSE: arithmetic average
+#'
+#' @returns Vector with variance and degrees of freedom estimates
+#' @export
+get_var_from_spec_wrapper_logsmooth <- function(xin,freq.start,freq.end,detrend=FALSE,df_log = 0.05,bLog=FALSE) {
+    spec_tmp <- PTBoxProxytools::paleodata_spectrum(xin,detrend=detrend,df.log=df_log,bLog=bLog)$logsmooth
+    return(PaleoSpec::GetVarFromSpectra(spec_tmp,f=c(freq.start,freq.end)))
+}
+
+#' Wrapper to compute frequency-dependent variance (based on `PaleoSpec::GetVarFromSpectra`)
+#' DEPRICATED --> Use `tsc_and_period_dep_var` instead, which provides point estimates and confidence intervals
+# Note that dof in PaleoSpec are slightly different from dof in nest, and because PaleoSpec doesn't provide ci's, rather use nest function tsc_dep_var instead
+#'
+#' @param xin Input zoo
+#' @param freq.start Lower frequency limit
+#' @param freq.end Upper frequency limit
+#' @param detrend Should linear detrending be applied before computing the spectra from which the timescales dependent variance is deduced
+#'
+#' @returns Vector with variance and degrees of freedom estimates
+#' @export
+get_var_from_spec_wrapper <- function(xin,freq.start,freq.end,detrend=FALSE) {
+    spec_tmp <- PTBoxProxytools::paleodata_spectrum(xin,detrend=detrend)$raw
+    return(PaleoSpec::GetVarFromSpectra(spec_tmp,f=c(freq.start,freq.end)))
+}
+
+#' Wrapper function for estimating period and timescale-dependent variances (based on PTBoxProxytools and nest functions)
+#'
+#' @param xin Input zoo
+#' @param period_start Start of period of interest
+#' @param period_end End of period of interest
+#' @param tsc_low Upper filtering timescale
+#' @param tsc_up Lower filtering timescale
+#' @param detrend Should linear detrending be applied before computing the spectra from which the timescales dependent variance is deduced
+#'
+#' @returns Data frame with columns for variance estimate, dof's, and lower and upper bounds of the confidence intervals
+#' @export
+tsc_and_period_dep_var <- function(xin,period_start,period_end,tsc_low,tsc_up,detrend=FALSE) {
+    if (!("matrix" %in% class(zoo::coredata(xin)))) {
+        ### Is there an error in the computation of the ci? I think it should be var.in * (var.dof) / qchisq(c(1 - pval/2), var.dof) instead of var.in * qchisq(c(1 - pval/2), var.dof)/(var.dof)
+        var_estimate <- xin %>% PTBoxProxytools::paleodata_windowing(.,period_start,period_end) %>% nest::tsc_dep_var(.,tsc.in=c(tsc_low,tsc_up),detrend=detrend)
+        var_estimate <- data.frame(var=var_estimate$var.tsc, dof=var_estimate$dof, var_low=var_estimate$var.ci$lo, var_up=var_estimate$var.ci$up)
+    } else {
+        var_estimate_list <- xin %>% PTBoxProxytools::paleodata_windowing(.,period_start,period_end) %>% lapply(., function(x) nest::tsc_dep_var(x,tsc.in=c(tsc_low,tsc_up),detrend=detrend)[c("var.tsc","dof","var.ci")])
+        var_estimate <- data.frame(var=numeric(),dof=numeric(),var_low=numeric(),var_up=numeric())
+        for (i in 1:length(var_estimate_list)) {
+            var_estimate <- dplyr::add_row(var_estimate, var=var_estimate_list[[i]]$var.tsc, dof=var_estimate_list[[i]]$dof, var_low=var_estimate_list[[i]]$var.ci$lo, var_up=var_estimate_list[[i]]$var.ci$up)
+        }
+        rownames(var_estimate) <- names(var_estimate_list)
+    }
+    return(var_estimate)
+}
+
+#' Wrapper to estimate timescale and time period dependent variances for multiple periods and timescale ranges
+#'
+#' @param xin Input zoo
+#' @param period_starts Start of periods of interest
+#' @param period_ends End of periods of interest
+#' @param tsc_lows Upper filtering timescales
+#' @param tsc_ups Lower filtering timescales
+#' @param detrend Should linear detrending be applied before computing the spectra from which the timescales dependent variance is deduced
+#'
+#' @returns 3D or 4D Matrix (Input zoo dimension x number of periods x number of timescales x output parameters); output parameters are the variance estimate, estimated dof, and lower and upper bounds of the confidence intervals
+#' @export
+multi_tsc_and_period_dep_var <- function(xin,period_starts,period_ends,tsc_lows,tsc_ups) {
+    if (!("matrix" %in% class(zoo::coredata(xin)))) {
+        var_estimates <- array(NA,dim=c(length(period_starts),length(tsc_lows),4))
+        for (i in 1:length(period_starts)) {
+            for (j in 1:length(tsc_lows)) {
+                var_estimates[i,j,] <- as.numeric(tsc_and_period_dep_var(xin, period_start = period_starts[i], period_end = period_ends[i], tsc_low = tsc_lows[j], tsc_up = tsc_ups[j], detrend = detrend))
+            }
+        }
+        dimnames(var_estimates) <- list(paste(period_starts,period_ends,sep="-"),paste(tsc_lows,tsc_ups,sep="-"),c("var","dof","var_low","var_up"))
+    } else {
+        var_estimates <- array(NA,dim=c(dim(xin)[2],length(period_starts),length(tsc_lows),4))
+        for (i in 1:length(period_starts)) {
+            for (j in 1:length(tsc_lows)) {
+                var_estimates[,i,j,] <- as.matrix(tsc_and_period_dep_var(xin, period_start = period_starts[i], period_end = period_ends[i], tsc_low = tsc_lows[j], tsc_up = tsc_ups[j], detrend = detrend))
+            }
+        }
+        dimnames(var_estimates) <- list(colnames(xin), paste(period_starts,period_ends,sep="-"), paste(tsc_lows,tsc_ups,sep="-"), c("var","dof","var_low","var_up"))
+    }
+    return(var_estimates)
+}
+
+#' Wrapper to draw samples of timescale and time period dependent variances
+#'
+#' @param xin Input zoo
+#' @param period_start Start of period of interest
+#' @param period_end End of period of interest
+#' @param tsc_low Upper filtering timescale
+#' @param tsc_up Lower filtering timescale
+#' @param nr_samples Number of samples
+#' @param detrend Should linear detrending be applied before computing the spectra from which the timescales dependent variance is deduced
+#'
+#' @returns Vector (univariate zoo) of matrix (multivariate zoo) with variance samples
+#' @export
+#'
+#' @examples
+tsc_and_period_dep_var_samples <- function(xin,period_start,period_end,tsc_low,tsc_up,nr_samples,detrend=FALSE) {
+    if (!("matrix" %in% class(zoo::coredata(xin)))) {
+        ### Is there an error in the computation of the ci? I think it should be var.in * (var.dof) / qchisq(c(1 - pval/2), var.dof) instead of var.in * qchisq(c(1 - pval/2), var.dof)/(var.dof)
+        ### By the way, PaleoSpec::AddConfInterval has the same reversal of the ratio, which looks wrong (asymptotatically both ratios are the same, as they converge to 1 for dof-->inf)
+        var_estimate <- xin %>% PTBoxProxytools::paleodata_windowing(.,period_start,period_end) %>% nest::tsc_dep_var(.,tsc.in=c(tsc_low,tsc_up),detrend=detrend)
+        var_estimate <- sample_var_uncertainty(nr_samples, var_estimate$var.tsc, var_estimate$dof)
+    } else {
+        var_estimate_list <- xin %>% PTBoxProxytools::paleodata_windowing(.,period_start,period_end) %>% lapply(., function(x) nest::tsc_dep_var(x,tsc.in=c(tsc_low,tsc_up),detrend=detrend)[c("var.tsc","dof","var.ci")])
+        var_estimate <- t(sapply(1:length(var_estimate_list), function(i) sample_var_uncertainty(nr_samples, var_estimate_list[[i]]$var.tsc, var_estimate_list[[i]]$dof)))
+        rownames(var_estimate) <- names(var_estimate_list)
+    }
+    return(var_estimate)
+}
+
+#' Wrapper to draw samples of timescale and time period dependent variances for multiple periods and timescale ranges
+#'
+#' @param xin Input zoo
+#' @param period_starts Start of periods of interest
+#' @param period_ends End of periods of interest
+#' @param tsc_lows Upper filtering timescales
+#' @param tsc_ups Lower filtering timescales
+#' @param nr_samples Number of samples
+#' @param detrend Should linear detrending be applied before computing the spectra from which the timescales dependent variance is deduced
+#'
+#' @returns 3D or 4D Matrix (Input zoo dimension x number of periods x number of timescales x number of samples)
+#' @export
+multi_tsc_and_period_dep_var_samples <- function(xin,period_starts,period_ends,tsc_lows,tsc_ups,nr_samples,detrend=FALSE) {
+    if (!("matrix" %in% class(zoo::coredata(xin)))) {
+        var_estimates <- array(NA,dim=c(length(period_starts),length(tsc_lows),nr_samples))
+        for (i in 1:length(period_starts)) {
+            for (j in 1:length(tsc_lows)) {
+                var_estimates[i,j,] <- tsc_and_period_dep_var_samples(xin, period_start = period_starts[i], period_end = period_ends[i], tsc_low = tsc_lows[j], tsc_up = tsc_ups[j], nr_samples = nr_samples, detrend = detrend)
+            }
+        }
+        dimnames(var_estimates) <- list(paste(periods_starts,period_ends,sep="-"),paste(tsc_lows,tsc_ups,sep="-"),1:nr_samples)
+    } else {
+        var_estimates <- array(NA,dim=c(dim(xin)[2],length(period_starts),length(tsc_lows),nr_samples))
+        for (i in 1:length(period_starts)) {
+            for (j in 1:length(tsc_lows)) {
+                var_estimates[,i,j,] <- tsc_and_period_dep_var_samples(xin, period_start = period_starts[i], period_end = period_ends[i], tsc_low = tsc_lows[j], tsc_up = tsc_ups[j], nr_samples = nr_samples, detrend = detrend)
+            }
+        }
+        dimnames(var_estimates) <- list(colnames(xin), paste(period_starts,period_ends,sep="-"), paste(tsc_lows,tsc_ups,sep="-"), 1:nr_samples)
+    }
+    return(var_estimates)
+}
+
+# ------------- Period and timescale dependent correlations / correlation matrices -------------
+
+#' Compute period and timescale specific correlation between irregularly spaced time series (using Gaussian kernel correlation if not all indices of the zoo's coincide)
+#'
+#' @param xin Input zoo
+#' @param yin Input zoo
+#' @param period_start Start of period of interest
+#' @param period_end End of period of interest
+#' @param tsc_low Upper filtering timescale
+#' @param tsc_up Lower filtering timescale
+#'
+#' @returns Data frame with correlation, p-value, and upper and lower bounds of the confidence interval columns
+#' @export
+tsc_and_period_dep_cor <- function(xin,yin,period_start,period_end,tsc_low,tsc_up) {
+    xin <- PTBoxProxytools::paleodata_windowing(PTBoxProxytools::paleodata_filtering(xin, filter_type = "bandpass", filter_scales = data.frame(lower=tsc_low, upper=tsc_up)), start_date = period_start, end_date = period_end)
+    yin <- PTBoxProxytools::paleodata_windowing(PTBoxProxytools::paleodata_filtering(yin, filter_type = "bandpass", filter_scales = data.frame(lower=tsc_low, upper=tsc_up)), start_date = period_start, end_date = period_end)
+    if (all(index(xin)==index(yin))) {
+        cor_tmp <- cor_test_effdof(xin,yin,method="pearson",alternative="two.sided",conf.level = 0.95)
+        return(data.frame(cor=cor_tmp$estimate, neff = cor_tmp$parameter+2, p_value=cor_tmp$p.value, cor_low=cor_tmp$conf.int[1], cor_up=cor_tmp$conf.int[2],method="pearson"))
+    } else {
+        cor_tmp <- nest::nexcf_ci(xin,yin)
+        return(data.frame(cor = cor_tmp$rxy, neff = cor_tmp$neff, p_value = cor_tmp$pval, cor_low = cor_tmp$ci.rxy[1], cor_up = cor_tmp$ci.rxy[2], method = "gkc"))
+    }
+}
+
+#' Compute period and timescale specific correlation matrix for multivariate zoo (based on common samples if some zoo columns contain NAs)
+#'
+#' @param xin Input multivariate zoo
+#' @param period_start Start of period of interest
+#' @param period_end End of period of interest
+#' @param tsc_low Upper filtering timescale
+#' @param tsc_up Lower filtering timescale
+#'
+#' @returns List with correlation matrix, p-value matrix, and matrices for upper and lower bounds of the confidence interval
+#' @export
+tsc_and_period_dep_cormat <- function(xin,period_start,period_end,tsc_low,tsc_up) {
+    xin <- clean_timeseries(xin,remove_na=FALSE,aggregation=TRUE,aggregation_fun=mean)
+    if (length(is.na(zoo::coredata(xin))) == 0) {
+        xin <- PTBoxProxytools::paleodata_windowing(PTBoxProxytools::paleodata_filtering(xin, filter_type = "bandpass", filter_scales = data.frame(lower=tsc_low, upper=tsc_up)), start_date = period_start, end_date = period_end)
+    } else {
+        for (i in 1:dim(xin)[2]) {
+            xin[which(!is.na(xin[,i])),i] <- PTBoxProxytools::paleodata_filtering(xin[which(!is.na(xin[,i])),i], filter_type = "bandpass", filter_scales = data.frame(lower=tsc_low, upper=tsc_up))
+        }
+        xin <- PTBoxProxytools::paleodata_windowing(xin, start_date = period_start, end_date = period_end)
+    }
+    cor <- p_value <- neff <- cor_low <- cor_up <- array(NA,dim=c(dim(xin)[2],dim(xin)[2]))
+    for (i in 1:dim(xin)[2]) {
+        for (j in 1:dim(xin)[2]) {
+            cor_tmp <- cor_test_effdof(xin[which(!(is.na(xin[,i])|is.na(xin[,j]))),i],xin[which(!(is.na(xin[,i])|is.na(xin[,j]))),j],method="pearson",alternative="two.sided",conf.level = 0.95)
+            cor[i,j] <- cor_tmp$estimate
+            neff[i,j] <- cor_tmp$parameter+2
+            p_value[i,j] <- cor_tmp$p.value
+            cor_low[i,j] <- cor_tmp$conf.int[1]
+            cor_up[i,j] <- cor_tmp$conf.int[2]
+        }
+    }
+    if (!is.null(colnames(xin))) {
+        rownames(cor) <- colnames(cor) <- rownames(p_value) <- colnames(p_value) <- rownames(cor_low) <- colnames(cor_low) <- rownames(cor_up) <- colnames(cor_up) <- colnames(xin)
+    }
+    return(list(cor=cor, neff=neff, p_value=p_value, cor_low=cor_low, cor_up=cor_up))
+}
+
+# ------------- Timescale-dependent variance ratios -------------------
+### Have to work on wrappers for tsc variances, variance ratios, and aggregations of them (including uncertainties from sampling)...
+# For each record:
+#   tsc_var_wrapper
+# nest::get_var_rat
+# Create samples (with varying resampling versions):
+#   hydrovegglac_shl_orbmil_samples[i,] <- hydrovegglac_shl_orbmil[i] * rf(10000,hydrovegglac_shl_orb[[i]]$dof,hydrovegglac_shl_mil[[i]]$dof)
+#
+# Combining records:
+#   Average within and between sites
+# hydrovegglac_shl_orbmil_samples_hydro_iso <- sapply(1:10000, function(i) average_within_and_between_sites(hydrovegglac_shl_orbmil_samples[which(hydrovegglac_shl$entity_id %in% ind_hydro_iso),i],hydrovegglac_shl$site_name[which(hydrovegglac_shl$entity_id %in% ind_hydro_iso)]))
+# Compute kernel density
+# dens_hydro_iso <- density(hydrovegglac_shl_orbmil_samples_hydro_iso)
+#
+# Output: samples, kernel density
+
