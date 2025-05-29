@@ -15,7 +15,7 @@ paleodata_multiprocessing(
   interpolation = rep(FALSE, times = length(processing_name)),
   interpolation_method = NULL,
   interpolation_xout = NULL,
-  interpolation_gk_smooth_scale = NULL,
+  interpolation_gk_smoothscale = NULL,
   windowing = rep(FALSE, times = length(processing_name)),
   start_date = NULL,
   end_date = NULL,

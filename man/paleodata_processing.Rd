@@ -14,7 +14,7 @@ paleodata_processing(
   interpolation = FALSE,
   interpolation_method = NULL,
   interpolation_xout = NULL,
-  interpolation_gk_smooth_scale = NULL,
+  interpolation_gk_smoothscale = NULL,
   windowing = FALSE,
   start_date = NULL,
   end_date = NULL,

@@ -19,8 +19,14 @@ paleodata_interpolation(
   binning_function = mean,
   loess_span = 0.25,
   gk_antialiasing = TRUE,
-  gk_smooth_scale = NULL,
-  gk_pass = 0.5
+  gk_smoothscale = NULL,
+  gk_pass = 0.5,
+  gam_family = "gaussian",
+  gam_smoothscale = NULL,
+  bayesgamls_family = "gaussian",
+  bayesgamls_smoothscale = NULL,
+  bayesgamls_nrsamples = 1000,
+  bayesgamls_backend = "rstan"
 )
 }
 \arguments{
@@ -48,9 +54,21 @@ paleodata_interpolation(
 
 \item{gk_antialiasing}{Should linear interpolation to higher resolution be applied prior to smoothing to avoid aliasing. Default is "TRUE"}
 
-\item{gk_smooth_scale}{Smoothing scale of the Gaussian kernel}
+\item{gk_smoothscale}{Smoothing scale of the Gaussian kernel}
 
 \item{gk_pass}{Gain at the smoothing scale. Default is 0.5}
+
+\item{gam_family}{Response distribution family (unlike for bayesgamls, this parameter requires a family function, any family supported by mgcv is valid)}
+
+\item{gam_smoothscale}{Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)}
+
+\item{bayesgamls_family}{Response distribution family (note that unlike gaminterp, here a string with a family name is required not the actually family function, "beta" is the only valid option at the moment); this is because different families have different parameter names to parameterize the gamls model}
+
+\item{bayesgamls_smoothscale}{Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)}
+
+\item{bayesgamls_nrsamples}{Number of posterior samples for each parameter}
+
+\item{bayesgamls_backend}{Which stan backend should be used ("rstan" or "cmdstanr")}
 }
 \value{
 Proxytibble with interpolated proxy data in `zoo::zoo` format or interpolated irregular time series object (`zoo::zoo`)
@@ -84,4 +102,8 @@ plot(edc_data_interpolated)
 \link{loess} (from `stats`) for loess interpolation
 
 \link{ksmooth} (from `stats`) for Gaussian kernel interpolation
+
+\link{gam} (from `mgcv`) for GAM interpolation and smoothing
+
+\link{brm} (from `brms`) for Bayesian GAMLS interpolation and smoothing
 }

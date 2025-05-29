@@ -7,7 +7,7 @@
 gkinterp(xin, xout, smooth_scale, pass = 0.5)
 }
 \arguments{
-\item{xin}{Input too}
+\item{xin}{Input zoo}
 
 \item{xout}{Output time axis}
 

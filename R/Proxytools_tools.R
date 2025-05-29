@@ -67,8 +67,14 @@ paleodata_windowing.Proxytibble <-
 #' @param binning_function How should values within one bin be averaged? Default is "mean"
 #' @param loess_span "span" parameter in loess fitting, controls degree of smoothing
 #' @param gk_antialiasing Should linear interpolation to higher resolution be applied prior to smoothing to avoid aliasing. Default is "TRUE"
-#' @param gk_smooth_scale Smoothing scale of the Gaussian kernel
+#' @param gk_smoothscale Smoothing scale of the Gaussian kernel
 #' @param gk_pass Gain at the smoothing scale. Default is 0.5
+#' @param gam_family Response distribution family (unlike for bayesgamls, this parameter requires a family function, any family supported by mgcv is valid)
+#' @param gam_smoothscale Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)
+#' @param bayesgamls_family Response distribution family (note that unlike gaminterp, here a string with a family name is required not the actually family function, "beta" is the only valid option at the moment); this is because different families have different parameter names to parameterize the gamls model
+#' @param bayesgamls_smoothscale Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)
+#' @param bayesgamls_nrsamples Number of posterior samples for each parameter
+#' @param bayesgamls_backend Which stan backend should be used ("rstan" or "cmdstanr")
 #'
 #' @return Proxytibble with interpolated proxy data in `zoo::zoo` format or interpolated irregular time series object (`zoo::zoo`)
 #' @export
@@ -99,6 +105,10 @@ paleodata_windowing.Proxytibble <-
 #'
 #' \link{ksmooth} (from `stats`) for Gaussian kernel interpolation
 #'
+#' \link{gam} (from `mgcv`) for GAM interpolation and smoothing
+#'
+#' \link{brm} (from `brms`) for Bayesian GAMLS interpolation and smoothing
+#'
 paleodata_interpolation <- function(xin,
                                     xout,
                                     method,
@@ -113,8 +123,14 @@ paleodata_interpolation <- function(xin,
                                     binning_function = mean,
                                     loess_span = 0.25,
                                     gk_antialiasing = TRUE,
-                                    gk_smooth_scale = NULL,
-                                    gk_pass = 0.5)
+                                    gk_smoothscale = NULL,
+                                    gk_pass = 0.5,
+                                    gam_family = "gaussian",
+                                    gam_smoothscale = NULL,
+                                    bayesgamls_family = "gaussian",
+                                    bayesgamls_smoothscale = NULL,
+                                    bayesgamls_nrsamples = 1000,
+                                    bayesgamls_backend = "rstan")
     UseMethod('paleodata_interpolation')
 
 #' @export
@@ -133,9 +149,15 @@ paleodata_interpolation.zoo <-
              binning_function = mean,
              loess_span = 0.25,
              gk_antialiasing = TRUE,
-             gk_smooth_scale = NULL,
-             gk_pass = 0.5) {
-        if (!method %in% c("linear","nn","spline","lh14","binning","loess","bwr25","gk")) {
+             gk_smoothscale = NULL,
+             gk_pass = 0.5,
+             gam_family = "gaussian",
+             gam_smoothscale = NULL,
+             bayesgamls_family = "gaussian",
+             bayesgamls_smoothscale = NULL,
+             bayesgamls_nrsamples = 1000,
+             bayesgamls_backend = "rstan") {
+        if (!method %in% c("linear","nn","spline","lh14","binning","loess","bwr25","gk","gam","bayesgamls")) {
             stop("`method` not supported")
         }
         if (method == "linear") {
@@ -264,15 +286,31 @@ paleodata_interpolation.zoo <-
         if (method == "gk") {
             if (gk_antialiasing == TRUE) {
                 xin <- paleodata_interpolation(xin,
-                                               seq(min(xout)-2*gk_smooth_scale, max(xout)+2*gk_smooth_scale, by=min(diff(xout))/10),
+                                               seq(min(xout)-2*gk_smoothscale, max(xout)+2*gk_smoothscale, by=min(diff(xout))/10),
                                                method="linear",remove_na==TRUE)
             }
             if (! ("matrix" %in% class(zoo::coredata(xin)))) {
-                xout <- gkinterp(xin, xout, smooth_scale = gk_smooth_scale, pass = gk_pass)
+                xout <- gkinterp(xin, xout, smooth_scale = gk_smoothscale, pass = gk_pass)
             } else {
                 xout <- PTBoxProxydata::zoo_apply(xin,function(xx)
-                                                            gkinterp(xx, xout = xout, smooth_scale = gk_smooth_scale, pass = gk_pass),
+                                                            gkinterp(xx, xout = xout, smooth_scale = gk_smoothscale, pass = gk_pass),
                                                             out_index = xout)
+            }
+        }
+        if (method == "gam") {
+           if (! ("matrix" %in% class(zoo::coredata(xin)))) {
+               xout <- gaminterp(xin, xout, family = gam_family, smooth_scale = gam_smoothscale)
+            } else {
+                xout <- PTBoxProxydata::zoo_apply(xin,function(xx)
+                    gaminterp(xx, xout = xout, family = gam_family, smooth_scale = gam_smoothscale),
+                    out_index = xout)
+            }
+        }
+        if (method == "bayesgamls") {
+            if (! ("matrix" %in% class(zoo::coredata(xin)))) {
+                xout <- bayesgamlsinterp(xin, xout, family = bayesgamls_family, smooth_scale = bayesgamls_smoothscale, location = TRUE, scale = FALSE, nr_samples = bayesgamls_nrsamples, backend = bayesgamls_backend)
+            } else {
+                stop("bayesgamls only supports univariate zoo objects as input")
             }
         }
         if (remove_extrapolated_values == TRUE) {
@@ -298,9 +336,15 @@ paleodata_interpolation.Proxytibble <-
              binning_function = mean,
              loess_span = 0.25,
              gk_antialiasing = TRUE,
-             gk_smooth_scale = NULL,
-             gk_pass = 0.5) {
-        if (!method %in% c("linear","nn","spline","lh14","binning","loess","bwr25","gk")) {
+             gk_smoothscale = NULL,
+             gk_pass = 0.5,
+             gam_family = "gaussian",
+             gam_smoothscale = NULL,
+             bayesgamls_family = "gaussian",
+             bayesgamls_smoothscale = NULL,
+             bayesgamls_nrsamples = 1000,
+             bayesgamls_backend = "rstan") {
+        if (!method %in% c("linear","nn","spline","lh14","binning","loess","bwr25","gk","gam","bayesgamls")) {
             stop("`method` not supported")
         }
         if (all(class(xin[[PTBoxProxydata::Proxytibble_colnames_proxy_data()]][[1]]) != 'zoo'))
@@ -322,8 +366,11 @@ paleodata_interpolation.Proxytibble <-
                 binning_function = binning_function,
                 loess_span = loess_span,
                 gk_antialiasing = gk_antialiasing,
-                gk_smooth_scale = gk_smooth_scale,
-                gk_pass = gk_pass
+                gk_smoothscale = gk_smoothscale,
+                gk_pass = gk_pass,
+                gam_family = gam_family,
+                gam_smoothscale = gam_smoothscale,
+                gam_nrsamples = gam_nrsamples
             )
         )
     }
@@ -1500,7 +1547,7 @@ paleodata_processing <-
              interpolation = FALSE,
              interpolation_method = NULL,
              interpolation_xout = NULL,
-             interpolation_gk_smooth_scale=NULL,
+             interpolation_gk_smoothscale=NULL,
              windowing = FALSE,
              start_date = NULL,
              end_date = NULL,
@@ -1513,7 +1560,7 @@ paleodata_processing <-
 #' @export
 paleodata_processing.zoo <- function(xin,
                                  filtering=FALSE,filter_type=NULL,filter_scales=NULL,detr_scale=NULL,smooth_scale=NULL,interpolation=FALSE,
-                                 interpolation_method=NULL,interpolation_xout=NULL,interpolation_gk_smooth_scale=NULL,windowing=FALSE,start_date=NULL,end_date=NULL,
+                                 interpolation_method=NULL,interpolation_xout=NULL,interpolation_gk_smoothscale=NULL,windowing=FALSE,start_date=NULL,end_date=NULL,
                                  transformation=FALSE,transformation_type=NULL,signal_extraction=FALSE,signal_type=NULL,signal_components=NA) {
     # Filtering
     if (filtering == TRUE) {
@@ -1521,7 +1568,7 @@ paleodata_processing.zoo <- function(xin,
     }
     # Interpolation
     if (interpolation == TRUE) {
-        xin <- paleodata_interpolation(xin,xout=interpolation_xout,method=interpolation_method,gk_smooth_scale=interpolation_gk_smooth_scale)
+        xin <- paleodata_interpolation(xin,xout=interpolation_xout,method=interpolation_method,gk_smoothscale=interpolation_gk_smoothscale)
     }
     # Time restriction (windowing)
     if (windowing == TRUE) {
@@ -1549,7 +1596,7 @@ paleodata_processing.Proxytibble <- function(xin,
                                              interpolation = FALSE,
                                              interpolation_method = NULL,
                                              interpolation_xout = NULL,
-                                             interpolation_gk_smooth_scale=NULL,
+                                             interpolation_gk_smoothscale=NULL,
                                              windowing = FALSE,
                                              start_date = NULL,
                                              end_date = NULL,
@@ -1572,7 +1619,7 @@ paleodata_processing.Proxytibble <- function(xin,
             interpolation = interpolation,
             interpolation_method = interpolation_method,
             interpolation_xout = interpolation_xout,
-            interpolation_gk_smooth_scale=interpolation_gk_smooth_scale,
+            interpolation_gk_smoothscale=interpolation_gk_smoothscale,
             windowing = windowing,
             start_date = start_date,
             end_date = end_date,
@@ -1652,7 +1699,7 @@ paleodata_multiprocessing <-
              interpolation = rep(FALSE, times = length(processing_name)),
              interpolation_method = NULL,
              interpolation_xout = NULL,
-             interpolation_gk_smooth_scale = NULL,
+             interpolation_gk_smoothscale = NULL,
              windowing = rep(FALSE, times = length(processing_name)),
              start_date = NULL,
              end_date = NULL,
@@ -1666,7 +1713,7 @@ paleodata_multiprocessing <-
 paleodata_multiprocessing.zoo <- function(xin,processing_name,filtering=rep(FALSE,times=length(processing_name)),
                                       filter_type=NULL,filter_scales=NULL,detr_scale=NULL,smooth_scale=NULL,
                                       interpolation=rep(FALSE,times=length(processing_name)),interpolation_method=NULL,
-                                      interpolation_xout=NULL,interpolation_gk_smooth_scale=NULL,windowing=rep(FALSE,times=length(processing_name)),start_date=NULL,
+                                      interpolation_xout=NULL,interpolation_gk_smoothscale=NULL,windowing=rep(FALSE,times=length(processing_name)),start_date=NULL,
                                       end_date=NULL,transformation=rep(FALSE,times=length(processing_name)),transformation_type=NULL,
                                       signal_extraction=rep(FALSE,times=length(processing_name)),signal_type=NULL,signal_components=NA) {
     data_processings <- list()
@@ -1676,7 +1723,7 @@ paleodata_multiprocessing.zoo <- function(xin,processing_name,filtering=rep(FALS
                                                            filter_scales=filter_scales[i,],detr_scale=detr_scale[i],
                                                            smooth_scale=smooth_scale[i],interpolation=interpolation[i],
                                                            interpolation_method=interpolation_method[i],interpolation_xout=interpolation_xout[[i]],
-                                                           interpolation_gk_smooth_scale=interpolation_gk_smooth_scale[i],
+                                                           interpolation_gk_smoothscale=interpolation_gk_smoothscale[i],
                                                            windowing=windowing[i],start_date=start_date[i],end_date=end_date[i],
                                                            transformation=transformation[i],transformation_type=transformation_type[i],
                                                            signal_extraction=signal_extraction[i],signal_type=signal_type[i],

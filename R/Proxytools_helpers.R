@@ -349,7 +349,7 @@ interp_bwr25 <- function(xin,xout) {
 
 #' Gaussian kernel interpolation and smoothing
 #'
-#' @param xin Input too
+#' @param xin Input zoo
 #' @param xout Output time axis
 #' @param smooth_scale Smoothing scale of the Gaussian kernel
 #' @param pass Gain at the smoothing scale
@@ -367,6 +367,110 @@ gkinterp <- function(xin, xout, smooth_scale, pass = 0.5) {
     return(xout)
 }
 
+#' GAM interpolation and smoothing
+#'
+#' @param xin Input zoo
+#' @param xout Output time axis
+#' @param family Response distribution family
+#' @param smooth_scale Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)
+#'
+#' @returns Zoo with smoothed and interpolated values at the provided interpolation dates
+#' @export
+gaminterp <- function(xin, xout, family = gaussian, smooth_scale = NULL) {
+    data <- data.frame(x=zoo::index(xin),y=zoo::coredata(xin))
+    if (is.null(smooth_scale)) {
+        gammodel <- mgcv::gam(y ~ s(x), family = family, data = data)
+    } else {
+        # Set number of knots in splines (I currently don't have a reference for how I obtained the formula, need to reconstruct and write up everything)
+        k <- round(diff(range(zoo::index(xin)))/smooth_scale,0)+4
+        gammodel <- mgcv::gam(y ~ s(x, k=k), family = family, data = data)
+    }
+    outdata <- data.frame(x=xout, y=rep(0,times=length(xout)))
+    xout <- zoo::zoo(predict(gammodel,type="response",newdata=outdata), order.by=xout)
+    return(xout)
+}
+
+#' Fit Bayesian GAMLS with `brms::brm` and return multivariate zoo with the samples for the location and scales parameters in the columns
+#'
+#' @param xin Input zoo
+#' @param xout Output time axis
+#' @param familyname Response distribution family (note that unlike gaminterp, here a string with a family name is required not the actually family function, "beta" is the only valid option at the moment); this is because different families have different parameter names to parameterize the gamls model
+#' @param smooth_scale Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)
+#' @param location Should samples of location parameter be returned?
+#' @param scale Should samples of scale parameter be returned?
+#' @param nr_samples Number of posterior samples for each parameter
+#' @param backend Which stan backend should be used ("rstan" or "cmdstanr")
+#'
+#' @returns Zoo with samples from location (smoothed and interpolated values) and scale (magnitude of residuals, measure for the approximate magnitude of sub-smoothscale variability) at the provided interpolation dates
+#' @export
+bayesgamlsinterp <- function(xin, xout, familyname = "beta", smooth_scale = NULL, location = TRUE, scale = TRUE, nr_samples = 1000, backend = "rstan") {
+    # Prepare data
+    data <- data.frame(x1=zoo::index(xin), x0=zoo::index(xin), y=zoo::coredata(xin))
+    # Note iter is the total number of iterations for each chain (including Warm-Up, usually half the samples are warm-up and half are sampling)
+    # Note: currently, the number of chains are fixed at 2, which means that each chain contributes half the samples to the total (nr_samples)
+    if (is.null(smooth_scale)) {
+        if (familyname == "beta") {
+            gamlsmodel <- brms::brm(brms::bf(y~s(x1),phi ~ s(x0)), family=brms::Beta, data=data, chains = 2, cores = 2, control = list(adapt_delta = 0.95,max_treedepth = 15), iter=nr_samples, backend = backend)
+        }
+        if (familyname == "gaussian") {
+            gamlsmodel <- brms::brm(brms::bf(y~s(x1),sigma ~ s(x0)), family=gaussian, data=data, chains = 2, cores = 2, control = list(adapt_delta = 0.95,max_treedepth = 15), iter=nr_samples, backend = backend)
+        }
+    } else {
+        # WRITE DEGREE OF THE SPLINE INTO GlobalEnv; THIS SEEMS TO BE A BUG IN brms WHICH SEARCHES FOR THE VARIABLE IN GlobalEnv AND NOT IN THE function environment; USE WITH CAUTION!!!
+        # Set number of knots in splines (I currently don't have a reference for how I obtained the formula, need to reconstruct and write up everything)
+        assign("brmssplinedegree", round(diff(range(zoo::index(xin)))/smooth_scale,0)+4, envir = .GlobalEnv)
+        if (familyname == "beta") {
+            gamlsmodel <- brms::brm(brms::bf(y~s(x1,k=brmssplinedegree),phi ~ s(x0,k=brmssplinedegree)), family=brms::Beta, data=data,chains = 2, cores = 2, control = list(adapt_delta = 0.95,max_treedepth = 15), iter=nr_samples, backend = backend)
+        }
+        if (familyname == "gaussian") {
+            gamlsmodel <- brms::brm(brms::bf(y~s(x1,k=brmssplinedegree),sigma ~ s(x0,k=brmssplinedegree)), family=gaussian, data=data, chains = 2, cores = 2, control = list(adapt_delta = 0.95,max_treedepth = 15), iter=nr_samples, backend = backend)
+        }
+
+    }
+    # Prepare sample construction
+    outdata <- data.frame(x0=xout, x1=xout, y=rep(0.5,times=length(xout)))
+    gamls_draws <- brms::prepare_predictions(gamlsmodel,newdata=outdata)
+    # Note that here I include all samples (not including warm-up), which fits with the samples used below for the intercept in brms::as_draws_array (in as_draws_array I can't specific the number of included draws, which would in principle be possible for prepare_predictions; could use subset_draws subsequently to extract lower number of samples)
+    if (location == TRUE) {
+        # Construct location samples (I currently don't have a reference for how I obtained these formulas, need to reconstruct and write up everything)
+        # It would still be nice, if there was an easier way to obtain samples for the location and scale parameters (I've found a way to create samples from the full distributional model, but not the two individual variables that parameterize the distribution)
+        mu_samples <- gamls_draws$dpars$mu$sm$fe$Xs %*% t(gamls_draws$dpars$mu$sm$fe$bs) + gamls_draws$dpars$mu$sm$re$sx1$Zs[[1]] %*% t(as.matrix((gamls_draws$dpars$mu$sm$re$sx1$s[[1]])))
+        if (familyname == "beta") {
+            mu_samples <- VGAM::logitlink(array(rep(c(brms::as_draws_array(gamlsmodel,variable="b_Intercept")),each=dim(mu_samples)[1]),dim=dim(mu_samples)) + mu_samples,inverse = TRUE)
+        }
+        if (familyname == "gaussian") {
+            mu_samples <- array(rep(c(brms::as_draws_array(gamlsmodel,variable="b_Intercept")),each=dim(mu_samples)[1]),dim=dim(mu_samples)) + mu_samples
+        }
+    }
+    if (scale == TRUE) {
+        # Construct scale samples (I currently don't have a reference for how I obtained these formulas, need to reconstruct and write up everything)
+        if (familyname == "beta") {
+            # I don't remember why I use 1/exp(phi) in the last line and not exp(phi) since brms::Beta has link_phi = "log" as default (https://paulbuerkner.com/brms/reference/brmsfamily.html)
+            # phi is a precision parameter (equivalent to "sample size" of a beta distribution, coming from a = mu * phi, b = (1-mu) + phi); 1/phi serve as a measures for the spread (inverse of the precision, similar to the precision in a Gaussian distribution being the inverse of the variance)
+            # Note that the result can be slightly unexpected because it's not directly translatable into variance / standard deviation
+            phi_samples <- gamls_draws$dpars$phi$sm$fe$Xs %*% t(gamls_draws$dpars$phi$sm$fe$bs) + gamls_draws$dpars$phi$sm$re$sx0$Zs[[1]] %*% t(as.matrix((gamls_draws$dpars$phi$sm$re$sx0$s[[1]])))
+            phi_samples <- 1/exp(array(rep(c(brms::as_draws_array(gamlsmodel,variable="b_phi_Intercept")),each=dim(phi_samples)[1]),dim=dim(phi_samples)) + phi_samples)
+        }
+        if (familyname == "gaussian") {
+            # exp() in the end is based on link_sigma = "log" in brmsfamily as stated here: https://paulbuerkner.com/brms/reference/brmsfamily.html
+            phi_samples <- gamls_draws$dpars$sigma$sm$fe$Xs %*% t(gamls_draws$dpars$sigma$sm$fe$bs) + gamls_draws$dpars$sigma$sm$re$sx0$Zs[[1]] %*% t(as.matrix((gamls_draws$dpars$sigma$sm$re$sx0$s[[1]])))
+            phi_samples <- exp(array(rep(c(brms::as_draws_array(gamlsmodel,variable="b_sigma_Intercept")),each=dim(phi_samples)[1]),dim=dim(phi_samples)) + phi_samples)
+        }
+        # When called through paleodata_interpolation, scale is set to FALSE as only mu is returned as ouptut
+    }
+    if (location == TRUE & scale == TRUE) {
+        xout <- zoo::zoo(cbind(mu_samples,phi_samples), order.by=xout)
+    } else {
+        if (location == TRUE) {
+            xout <- zoo::zoo(mu_samples, order.by=xout)
+        } else {
+            if (scale == TRUE) {
+                xout <- zoo::zoo(phi_samples, order.by=xout)
+            }
+        }
+    }
+    return(xout)
+}
 
 #' Remove samples in interpolated zoo that are far away from original samples
 #'
