@@ -370,7 +370,10 @@ paleodata_interpolation.Proxytibble <-
                 gk_pass = gk_pass,
                 gam_family = gam_family,
                 gam_smoothscale = gam_smoothscale,
-                gam_nrsamples = gam_nrsamples
+                bayesgamls_family = bayesgamls_family,
+                bayesgamls_smoothscale = bayesgamls_smoothscale,
+                bayesgamls_nrsamples = bayesgamls_nrsamples,
+                bayesgamls_backend = bayesgamls_backend
             )
         )
     }
@@ -1283,14 +1286,26 @@ find_max_window.Proxytibble <- function(xin,t_min=min(zoo::index(xin)),t_max=max
 #' @param window_minres Min resolution
 #' @param window_maxstep Maximal time step
 #' @param window_minlength Minimum length of window
+#' @param window_maxdistfromsample M
 #' @param xin_interp Interpolated values
 #' @param age_uncertainty Method for including age uncertainty
 #' @param age_uncertainty_std Std. for age uncertainty
 #' @param value_uncertainty Method for including proxy uncertainty
 #' @param value_uncertainty_std Std. for proxy uncertainty
 #' @param interpolation_method Interpolation width
-#' @param bin_width Binning width
-#' @param binning_function Binning function
+#' @param lh14_lowpass Scaling factor for the lowpass frequency. Default is 1.2 (same as in PaleoSpec::MakeEquidistant)
+#' @param lh14_length Scaling factor for the Length of the filter. Default is 5 (same as in PaleoSpec::MakeEquidistant)
+#' @param bin_width Width of bins if interpolation method is "binning". Defaults to the mean sample resolution (no variable bin sizes are supported at the moment)
+#' @param binning_function How should values within one bin be averaged? Default is "mean"
+#' @param loess_span "span" parameter in loess fitting, controls degree of smoothing
+#' @param gk_antialiasing Should linear interpolation to higher resolution be applied prior to smoothing to avoid aliasing. Default is "TRUE"
+#' @param gk_smoothscale Smoothing scale of the Gaussian kernel
+#' @param gk_pass Gain at the smoothing scale. Default is 0.5
+#' @param gam_family Response distribution family (unlike for bayesgamls, this parameter requires a family function, any family supported by mgcv is valid)
+#' @param gam_smoothscale Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)
+#' @param bayesgamls_family Response distribution family (note that unlike gaminterp, here a string with a family name is required not the actually family function, "beta" is the only valid option at the moment); this is because different families have different parameter names to parameterize the gamls model
+#' @param bayesgamls_smoothscale Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)
+#' @param bayesgamls_backend Which stan backend should be used ("rstan" or "cmdstanr")
 #' @param site_normalization Should site values be normalized?
 #' @param bootstrapping Use bootstrapping over sites?
 #' @param stacking_method Stacking method
@@ -1328,9 +1343,20 @@ site_mean <- function(xin,
                       age_uncertainty_std=1000,
                       value_uncertainty="white_noise",
                       value_uncertainty_std=5,
-                      interpolation_method="binning",
-                      bin_width=sample_interval,
-                      binning_function=mean,
+                      interpolation_method="lh14",
+                      lh14_lowpass = 1.2,
+                      lh14_length = 5,
+                      bin_width = sample_interval,
+                      binning_function = mean,
+                      loess_span = 0.25,
+                      gk_antialiasing = TRUE,
+                      gk_smoothscale = NULL,
+                      gk_pass = 0.5,
+                      gam_family = "gaussian",
+                      gam_smoothscale = NULL,
+                      bayesgamls_family = "gaussian",
+                      bayesgamls_smoothscale = NULL,
+                      bayesgamls_backend = "rstan",
                       site_normalization=FALSE,
                       bootstrapping=TRUE,
                       stacking_method="site_mean",
@@ -1381,8 +1407,22 @@ site_mean <- function(xin,
                                                         method=interpolation_method,
                                                         remove_na = FALSE,
                                                         aggregation = FALSE,
+                                                        remove_extrapolated_values = FALSE,
+                                                        max_dist = Inf,
+                                                        lh14_lowpass = lh14_lowpass,
+                                                        lh14_length = lh14_length,
                                                         bin_width = bin_width,
-                                                        binning_function = binning_function)
+                                                        binning_function = binning_function,
+                                                        loess_span = loess_span,
+                                                        gk_antialiasing = gk_antialiasing,
+                                                        gk_smoothscale = gk_smoothscale,
+                                                        gk_pass = gk_pass,
+                                                        gam_family = gam_family,
+                                                        gam_smoothscale = gam_smoothscale,
+                                                        bayesgamls_family = bayesgamls_family,
+                                                        bayesgamls_smoothscale = bayesgamls_smoothscale,
+                                                        bayesgamls_nrsamples = nr_samples,
+                                                        bayesgamls_backend = bayesgamls_backend)
         }
     } else {
         # CASE 2: xin_interp (ensembles of interpolated values) is provided from pre-computed interpolation, e.g. Bayesian gamls models which take long to compute for large ensembles of records

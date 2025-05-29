@@ -28,9 +28,20 @@ site_mean(
   age_uncertainty_std = 1000,
   value_uncertainty = "white_noise",
   value_uncertainty_std = 5,
-  interpolation_method = "binning",
+  interpolation_method = "lh14",
+  lh14_lowpass = 1.2,
+  lh14_length = 5,
   bin_width = sample_interval,
   binning_function = mean,
+  loess_span = 0.25,
+  gk_antialiasing = TRUE,
+  gk_smoothscale = NULL,
+  gk_pass = 0.5,
+  gam_family = "gaussian",
+  gam_smoothscale = NULL,
+  bayesgamls_family = "gaussian",
+  bayesgamls_smoothscale = NULL,
+  bayesgamls_backend = "rstan",
   site_normalization = FALSE,
   bootstrapping = TRUE,
   stacking_method = "site_mean",
@@ -79,6 +90,8 @@ site_mean(
 
 \item{window_minlength}{Minimum length of window}
 
+\item{window_maxdistfromsample}{M}
+
 \item{xin_interp}{Interpolated values}
 
 \item{age_uncertainty}{Method for including age uncertainty}
@@ -91,9 +104,31 @@ site_mean(
 
 \item{interpolation_method}{Interpolation width}
 
-\item{bin_width}{Binning width}
+\item{lh14_lowpass}{Scaling factor for the lowpass frequency. Default is 1.2 (same as in PaleoSpec::MakeEquidistant)}
 
-\item{binning_function}{Binning function}
+\item{lh14_length}{Scaling factor for the Length of the filter. Default is 5 (same as in PaleoSpec::MakeEquidistant)}
+
+\item{bin_width}{Width of bins if interpolation method is "binning". Defaults to the mean sample resolution (no variable bin sizes are supported at the moment)}
+
+\item{binning_function}{How should values within one bin be averaged? Default is "mean"}
+
+\item{loess_span}{"span" parameter in loess fitting, controls degree of smoothing}
+
+\item{gk_antialiasing}{Should linear interpolation to higher resolution be applied prior to smoothing to avoid aliasing. Default is "TRUE"}
+
+\item{gk_smoothscale}{Smoothing scale of the Gaussian kernel}
+
+\item{gk_pass}{Gain at the smoothing scale. Default is 0.5}
+
+\item{gam_family}{Response distribution family (unlike for bayesgamls, this parameter requires a family function, any family supported by mgcv is valid)}
+
+\item{gam_smoothscale}{Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)}
+
+\item{bayesgamls_family}{Response distribution family (note that unlike gaminterp, here a string with a family name is required not the actually family function, "beta" is the only valid option at the moment); this is because different families have different parameter names to parameterize the gamls model}
+
+\item{bayesgamls_smoothscale}{Approximate smoothing scale of the GAM model (translated internally to number of basis functions of the fitted splines)}
+
+\item{bayesgamls_backend}{Which stan backend should be used ("rstan" or "cmdstanr")}
 
 \item{site_normalization}{Should site values be normalized?}
 
