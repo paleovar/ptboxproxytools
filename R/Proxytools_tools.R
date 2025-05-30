@@ -151,7 +151,7 @@ paleodata_interpolation.zoo <-
              gk_antialiasing = TRUE,
              gk_smoothscale = NULL,
              gk_pass = 0.5,
-             gam_family = "gaussian",
+             gam_family = gaussian,
              gam_smoothscale = NULL,
              bayesgamls_family = "gaussian",
              bayesgamls_smoothscale = NULL,
@@ -1397,32 +1397,60 @@ site_mean <- function(xin,
     # 2) Interpolate (and smooth) to common axis, if no xin_interp is provided
     # CASE 1: Input data is proxytibble with (raw) proxy records (i.e. not interpolated to common time axis, no prior treatment like smoothing or interpolation is assume)
     if (is.null(xin_interp)) {
-        # Interpolations methods: binning --> OK, lh14 --> looks good to me except for a few very low res records which might have to be removed, spline --> DON'T USE, PRODUCES TO MANY STRANGE VALUES, High-res linear + Gaussian kernel --> OK, loess --> OK, GAMLS --> !
-        var_at_sites <- array(NA,dim=c(dim(xin)[1],length(time)))
-        for (i in 1:dim(xin)[1]) {
-            # ATTENTION: NEED TO UPDATE THE PALEODATA_INTERPOLATIO FUNCTION WITH extrapolate_dist (set values to NA which are further away from range of record than extrapolate_dist) AND max_dist_from_input_sample (set values to NA which are further away from nearest input time point than max_dist_from_input_sample) PARAMETERS
-            # var_at_sites[i,] <- paleodata_interpolation(xin$proxy_data[[i]],method=interpolation_method,xout=time,extrapolate_dist=sample_interval/2,max_dist_from_input_sample=Inf,remove_na = FALSE, aggregation = FALSE, bin_width = bin_width, binning_function = binning_function)
-            var_at_sites[i,] <- paleodata_interpolation(xin$proxy_data[[i]],
-                                                        xout=time,
-                                                        method=interpolation_method,
-                                                        remove_na = FALSE,
-                                                        aggregation = FALSE,
-                                                        remove_extrapolated_values = FALSE,
-                                                        max_dist = Inf,
-                                                        lh14_lowpass = lh14_lowpass,
-                                                        lh14_length = lh14_length,
-                                                        bin_width = bin_width,
-                                                        binning_function = binning_function,
-                                                        loess_span = loess_span,
-                                                        gk_antialiasing = gk_antialiasing,
-                                                        gk_smoothscale = gk_smoothscale,
-                                                        gk_pass = gk_pass,
-                                                        gam_family = gam_family,
-                                                        gam_smoothscale = gam_smoothscale,
-                                                        bayesgamls_family = bayesgamls_family,
-                                                        bayesgamls_smoothscale = bayesgamls_smoothscale,
-                                                        bayesgamls_nrsamples = nr_samples,
-                                                        bayesgamls_backend = bayesgamls_backend)
+        # Interpolations methods: binning --> OK, lh14 --> looks good to me except for a few very low res records which might have to be removed, spline --> DON'T USE, PRODUCES TO MANY STRANGE VALUES, High-res linear + Gaussian kernel --> OK, loess --> OK, GAMLS --> Implemented in principle
+        # Separate "bayesgamls" which produces posterior samples instead of a univariate interpolated timeseries
+        if (interpolation_method != "bayesgamls") {
+            var_at_sites <- array(NA,dim=c(dim(xin)[1],length(time)))
+            for (i in 1:dim(xin)[1]) {
+                cat(xin$name[i],"\n")
+                var_at_sites[i,] <- paleodata_interpolation(xin$proxy_data[[i]],
+                                                            xout=time,
+                                                            method=interpolation_method,
+                                                            remove_na = FALSE,
+                                                            aggregation = FALSE,
+                                                            remove_extrapolated_values = FALSE,
+                                                            max_dist = Inf,
+                                                            lh14_lowpass = lh14_lowpass,
+                                                            lh14_length = lh14_length,
+                                                            bin_width = bin_width,
+                                                            binning_function = binning_function,
+                                                            loess_span = loess_span,
+                                                            gk_antialiasing = gk_antialiasing,
+                                                            gk_smoothscale = gk_smoothscale,
+                                                            gk_pass = gk_pass,
+                                                            gam_family = gam_family,
+                                                            gam_smoothscale = gam_smoothscale,
+                                                            bayesgamls_family = bayesgamls_family,
+                                                            bayesgamls_smoothscale = bayesgamls_smoothscale,
+                                                            bayesgamls_nrsamples = nr_samples,
+                                                            bayesgamls_backend = bayesgamls_backend)
+            }
+        } else {
+            var_at_sites <- array(NA,dim=c(dim(xin)[1],length(time),nr_samples))
+            for (i in 1:dim(xin)[1]) {
+                cat(xin$name[i],"\n")
+                var_at_sites[i,,] <- paleodata_interpolation(xin$proxy_data[[i]],
+                                                            xout=time,
+                                                            method=interpolation_method,
+                                                            remove_na = FALSE,
+                                                            aggregation = FALSE,
+                                                            remove_extrapolated_values = FALSE,
+                                                            max_dist = Inf,
+                                                            lh14_lowpass = lh14_lowpass,
+                                                            lh14_length = lh14_length,
+                                                            bin_width = bin_width,
+                                                            binning_function = binning_function,
+                                                            loess_span = loess_span,
+                                                            gk_antialiasing = gk_antialiasing,
+                                                            gk_smoothscale = gk_smoothscale,
+                                                            gk_pass = gk_pass,
+                                                            gam_family = gam_family,
+                                                            gam_smoothscale = gam_smoothscale,
+                                                            bayesgamls_family = bayesgamls_family,
+                                                            bayesgamls_smoothscale = bayesgamls_smoothscale,
+                                                            bayesgamls_nrsamples = nr_samples,
+                                                            bayesgamls_backend = bayesgamls_backend)
+            }
         }
     } else {
         # CASE 2: xin_interp (ensembles of interpolated values) is provided from pre-computed interpolation, e.g. Bayesian gamls models which take long to compute for large ensembles of records
