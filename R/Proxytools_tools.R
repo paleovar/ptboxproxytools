@@ -1492,7 +1492,7 @@ site_mean <- function(xin,
         if (length(dim(var_at_sites)) == 2) {
             var_at_sites <- t(apply(var_at_sites,1,normalize))
         } else {
-            var_at_sites <- aperm(apply(var_at_sites,c(1,3),normalize),c(2,3,1))
+            var_at_sites <- aperm(apply(var_at_sites,c(1,3),normalize),c(2,1,3))
         }
     }
 
