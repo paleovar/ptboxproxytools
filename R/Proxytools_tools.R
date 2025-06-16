@@ -287,7 +287,7 @@ paleodata_interpolation.zoo <-
             if (gk_antialiasing == TRUE) {
                 xin <- paleodata_interpolation(xin,
                                                seq(min(xout)-2*gk_smoothscale, max(xout)+2*gk_smoothscale, by=min(diff(xout))/10),
-                                               method="linear",remove_na==TRUE)
+                                               method="linear",remove_na=TRUE)
             }
             if (! ("matrix" %in% class(zoo::coredata(xin)))) {
                 xout <- gkinterp(xin, xout, smooth_scale = gk_smoothscale, pass = gk_pass)
