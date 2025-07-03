@@ -1037,7 +1037,7 @@ paleodata_spectrum.zoo <-
         if (! ("matrix" %in% class(zoo::coredata(xin)))) {
             spectrum <- list()
             spectrum$raw <- PaleoSpec::SpecMTM(stats::as.ts(xin), detrend = detrend)
-            spectrum$logsmooth <- PaleoSpec::LogSmooth(spectrum$raw, df_log = df_log, bLog = bLog)
+            spectrum$logsmooth <- PaleoSpec::LogSmooth(spectrum$raw, df.log = df_log, bLog = bLog)
             return(spectrum)
         } else {
             spectra <-
