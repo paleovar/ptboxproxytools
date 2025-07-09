@@ -285,14 +285,16 @@ paleodata_interpolation.zoo <-
         }
         if (method == "gk") {
             if (gk_antialiasing == TRUE) {
-                xin <- paleodata_interpolation(xin,
-                                               seq(min(xout)-2*gk_smoothscale, max(xout)+2*gk_smoothscale, by=min(diff(xout))/10),
-                                               method="linear",remove_na=TRUE)
+                xin_tmp <- paleodata_interpolation(xin,
+                                                   seq(min(xout)-2*gk_smoothscale, max(xout)+2*gk_smoothscale, by=min(diff(xout))/10),
+                                                   method="linear",remove_na=TRUE, remove_extrapolated_values = TRUE, max_dist = 2*gk_smoothscale)
+            } else {
+                xin_tmp <- xin
             }
             if (! ("matrix" %in% class(zoo::coredata(xin)))) {
-                xout <- gkinterp(xin, xout, smooth_scale = gk_smoothscale, pass = gk_pass)
+                xout <- gkinterp(xin_tmp, xout, smooth_scale = gk_smoothscale, pass = gk_pass)
             } else {
-                xout <- PTBoxProxydata::zoo_apply(xin,function(xx)
+                xout <- PTBoxProxydata::zoo_apply(xin_tmp,function(xx)
                                                             gkinterp(xx, xout = xout, smooth_scale = gk_smoothscale, pass = gk_pass),
                                                             out_index = xout)
             }
