@@ -47,6 +47,7 @@ site_mean(
   stacking_method = "site_mean",
   gridbox_size = c(20, 10),
   land_area_only = TRUE,
+  weighting_map = NULL,
   dist_exp = 1,
   within_group_method = "avgdist",
   group_weights = NULL,
@@ -139,6 +140,8 @@ site_mean(
 \item{gridbox_size}{Gridbox size for grid-based interpolation methods}
 
 \item{land_area_only}{Use land areas only for latitudinal weighting}
+
+\item{weighting_map}{Additional map to weight the land points in land area computation (needs to have same dimension as the land map)}
 
 \item{dist_exp}{Exponent in computing weights with avgdist}
 

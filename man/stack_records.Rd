@@ -13,6 +13,7 @@ stack_records(
   lat_max = 90,
   gridbox_size = c(20, 10),
   land_area_only = TRUE,
+  weighting_map = NULL,
   dist_exp = 1,
   within_group_method = "avgdist",
   group_weights = NULL,
