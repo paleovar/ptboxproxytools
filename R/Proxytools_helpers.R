@@ -583,7 +583,7 @@ compute_group_weights_from_maps <- function(group_maps) {
 #'
 #' @returns Vector wit weighted mean values for each timestep (not a zoo!)
 #' @export
-stack_records <- function(site_data, stacking_method="site_mean",lon_min=-180,lon_max=180,lat_min=-90,lat_max=90,gridbox_size=c(20,10),land_area_only=TRUE,dist_exp=1,within_group_method="avgdist",group_weights=NULL,group_maps=NULL) {
+stack_records <- function(site_data, stacking_method="site_mean",lon_min=-180,lon_max=180,lat_min=-90,lat_max=90,gridbox_size=c(20,10),land_area_only=TRUE,weighting_map=NULL,dist_exp=1,within_group_method="avgdist",group_weights=NULL,group_maps=NULL) {
     if (length(site_data$lon) == 1) {
         return(site_data$var)
     }
@@ -610,6 +610,13 @@ stack_records <- function(site_data, stacking_method="site_mean",lon_min=-180,lo
             lat_seq <- lat_seq[-length(lat_seq)]+gridbox_size[2]/2
             if (land_area_only == TRUE) {
                 land_area_fractions <- readRDS("land_area.rds")
+                land_area_fractions$ice_free_land_area[which(land_area_fractions$lon < lon_min | land_area_fractions$lon > lon_max),] <- 0
+                land_area_fractions$ice_free_land_area[,which(land_area_fractions$lat < lat_min | land_area_fractions$lat > lat_max)] <- 0
+                if (!is.null(weighting_map)) {
+                    weighting_map[which(is.na(weighting_map))] <- 0
+                    land_area_fractions$ice_free_land_area <- land_area_fractions$ice_free_land_area * weighting_map
+                }
+                land_area_fractions$ice_free_land_area_per_lat  <- apply(land_area_fractions$ice_free_land_area,2,mean)
                 land_area_fractions_interpolated <- c(rep(0,times=length(lat_seq[which(lat_seq <= -60)])), sapply(lat_seq[which(lat_seq > -60)],
                                                                                                                   function(x) spatial_means(lon = 0,
                                                                                                                                             lat = land_area_fractions$lat[which(land_area_fractions$lat >= x-gridbox_size[2]/2 & land_area_fractions$lat < x+gridbox_size[2]/2)],
@@ -638,6 +645,7 @@ stack_records <- function(site_data, stacking_method="site_mean",lon_min=-180,lo
                                               lat_max = lat_max,
                                               gridbox_size = gridbox_size,
                                               land_area_only=land_area_only,
+                                              weighting_map=group_maps$maps[[k]],
                                               dist_exp = dist_exp)
         }
         if (is.null(group_weights)) {

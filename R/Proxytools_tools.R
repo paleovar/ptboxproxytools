@@ -1313,6 +1313,7 @@ find_max_window.Proxytibble <- function(xin,t_min=min(zoo::index(xin)),t_max=max
 #' @param stacking_method Stacking method
 #' @param gridbox_size Gridbox size for grid-based interpolation methods
 #' @param land_area_only Use land areas only for latitudinal weighting
+#' @param weighting_map Additional map to weight the land points in land area computation (needs to have same dimension as the land map)
 #' @param dist_exp Exponent in computing weights with avgdist
 #' @param within_group_method Averaging method within groups
 #' @param group_weights Group weight
@@ -1364,6 +1365,7 @@ site_mean <- function(xin,
                       stacking_method="site_mean",
                       gridbox_size=c(20,10),
                       land_area_only=TRUE,
+                      weighting_map=NULL,
                       dist_exp=1,
                       within_group_method="avgdist",
                       group_weights=NULL,
@@ -1519,6 +1521,7 @@ site_mean <- function(xin,
                                                                         lat_max = lat_max,
                                                                         gridbox_size = gridbox_size,
                                                                         land_area_only=land_area_only,
+                                                                        weighting_map=weighting_map,
                                                                         dist_exp = dist_exp,
                                                                         within_group_method=within_group_method,
                                                                         group_weights=group_weights,
@@ -1532,6 +1535,7 @@ site_mean <- function(xin,
                                                                         lat_max = lat_max,
                                                                         gridbox_size = gridbox_size,
                                                                         land_area_only=land_area_only,
+                                                                        weighting_map=weighting_map,
                                                                         dist_exp = dist_exp,
                                                                         within_group_method=within_group_method,
                                                                         group_weights=group_weights,
