@@ -37,6 +37,8 @@ stack_records(
 
 \item{land_area_only}{Use land areas only for latitudinal weighting}
 
+\item{weighting_map}{Additional map to weight the land points in land area computation (needs to have same dimension as the land map)}
+
 \item{dist_exp}{Exponent in computing weights with avgdist}
 
 \item{within_group_method}{Averaging method within groups}

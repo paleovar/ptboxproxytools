@@ -576,6 +576,7 @@ compute_group_weights_from_maps <- function(group_maps) {
 #' @param lat_max Lat max
 #' @param gridbox_size Gridbox size for grid-based interpolation methods
 #' @param land_area_only Use land areas only for latitudinal weighting
+#' @param weighting_map Additional map to weight the land points in land area computation (needs to have same dimension as the land map)
 #' @param dist_exp Exponent in computing weights with avgdist
 #' @param within_group_method Averaging method within groups
 #' @param group_weights Group weight
