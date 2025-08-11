@@ -226,14 +226,18 @@ as.numeric.factor <- function(x) {
 #' print(clim_mean)
 #'
 spatial_means <- function(lon,lat,clim_field,weighting_field=NULL) {
-    spatial_weights <- array(0,dim=c(length(lon),length(lat)))
-    for (i in 1:length(lat)) {spatial_weights[,i] <- (cos((lat[i]+mean(diff(lat))/2)*pi/180)+cos((lat[i]-mean(diff(lat))/2)*pi/180))/2}
-    if (!is.null(weighting_field)) {
-        spatial_weights <- weighting_field * spatial_weights
+    if (length(which(!is.na(clim_field))) == 0) {
+        return(NA)
+    } else {
+        spatial_weights <- array(0,dim=c(length(lon),length(lat)))
+        for (i in 1:length(lat)) {spatial_weights[,i] <- (cos((lat[i]+mean(diff(lat))/2)*pi/180)+cos((lat[i]-mean(diff(lat))/2)*pi/180))/2}
+        if (!is.null(weighting_field)) {
+            spatial_weights <- weighting_field * spatial_weights
+        }
+        spatial_weights[which(is.na(clim_field[1:(length(lon)*length(lat))]))] <- NA
+        spatial_weights <- spatial_weights/sum(spatial_weights,na.rm=T)
+        return(sum(spatial_weights*clim_field,na.rm=T))
     }
-    spatial_weights[which(is.na(clim_field[1:(length(lon)*length(lat))]))] <- NA
-    spatial_weights <- spatial_weights/sum(spatial_weights,na.rm=T)
-    return(sum(spatial_weights*clim_field,na.rm=T))
 }
 
 #' Replicate data vector of zoo object (time axis does not change)
