@@ -1490,6 +1490,10 @@ site_mean <- function(xin,
         }
         xin <- xin[ind_complete_records,]
     }
+    if (length(xin) == 0) {
+        warning("No record remains for computation of site mean, return NULL")
+        return(NULL)
+    }
 
     # 4) Normalize records --> unclear if that is useful, values of records are not directly comparable, but also normalization will lead to major changes even for records without any changes
     if (site_normalization == TRUE) {
