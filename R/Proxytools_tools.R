@@ -1485,7 +1485,11 @@ site_mean <- function(xin,
     }
     if (dim(xin)[1] == 1) {
         warning("Only one record available for site_mean, return values from single record")
-        stack_samples <- var_at_sites[1,,]
+        if (length(dim(var_at_sites)) == 2) {
+            stack_samples <- array(var_at_sites[1,],dim=c(lengt(time),nr_samples))
+        } else {
+            stack_samples <- var_at_sites[1,,]
+        }
         if (anomalies == TRUE) {
             stack_samples <- apply(stack_samples,2,normalize,scale=FALSE)
         }
@@ -1516,7 +1520,11 @@ site_mean <- function(xin,
     }
     if (dim(xin)[1] == 1) {
         warning("Only one record available for site_mean, return values from single record")
-        stack_samples <- var_at_sites[1,,]
+        if (length(dim(var_at_sites)) == 2) {
+            stack_samples <- array(var_at_sites[1,],dim=c(lengt(time),nr_samples))
+         } else {
+            stack_samples <- var_at_sites[1,,]
+        }
         if (anomalies == TRUE) {
             stack_samples <- apply(stack_samples,2,normalize,scale=FALSE)
         }
