@@ -1479,6 +1479,26 @@ site_mean <- function(xin,
             var_at_sites <- remove_extrapolated_samples(windowed_proxydata,var_at_sites,time,max_dist=window_maxdistfromsample)
         }
     }
+    if (dim(xin)[1] == 0) {
+        warning("No record remains for computation of site mean, return NULL")
+        return(NULL)
+    }
+    if (dim(xin)[1] == 1) {
+        warning("Only one record available for site_mean, return values from single record")
+        stack_samples <- var_at_sites[1,,]
+        if (anomalies == TRUE) {
+            stack_samples <- apply(stack_samples,2,normalize,scale=FALSE)
+        }
+        if (rescale == TRUE) {
+            stack_samples <- apply(stack_samples,2,normalize)
+        }
+
+        # 8) Compute summary statistics
+        stack_quantiles <- apply(stack_samples,1,quantile,c(0.05,0.1,0.25,0.5,0.75,0.9,0.95),na.rm=TRUE)
+        stack_means <- apply(stack_samples,1,mean,na.rm=TRUE)
+        stack_included_records <- apply(var_at_sites,2,function(x) length(which(!is.na(x))))
+        return(list(time=time, means=stack_means, samples=stack_samples, quantiles = stack_quantiles, included_records = stack_included_records))
+    }
     if (use_complete_records_only == TRUE) {
         window_time <- time[which(time >= window_tmin & time <= window_tmax)]
         if (length(dim(var_at_sites)) == 2) {
