@@ -1490,9 +1490,25 @@ site_mean <- function(xin,
         }
         xin <- xin[ind_complete_records,]
     }
-    if (length(xin) == 0) {
+    if (dim(xin)[1] == 0) {
         warning("No record remains for computation of site mean, return NULL")
         return(NULL)
+    }
+    if (dim(xin)[1] == 1) {
+        warning("Only one record available for site_mean, return values from single record")
+        stack_samples <- var_at_sites[1,,]
+        if (anomalies == TRUE) {
+            stack_samples <- apply(stack_samples,2,normalize,scale=FALSE)
+        }
+        if (rescale == TRUE) {
+            stack_samples <- apply(stack_samples,2,normalize)
+        }
+
+        # 8) Compute summary statistics
+        stack_quantiles <- apply(stack_samples,1,quantile,c(0.05,0.1,0.25,0.5,0.75,0.9,0.95),na.rm=TRUE)
+        stack_means <- apply(stack_samples,1,mean,na.rm=TRUE)
+        stack_included_records <- apply(var_at_sites,2,function(x) length(which(!is.na(x))))
+        return(list(time=time, means=stack_means, samples=stack_samples, quantiles = stack_quantiles, included_records = stack_included_records))
     }
 
     # 4) Normalize records --> unclear if that is useful, values of records are not directly comparable, but also normalization will lead to major changes even for records without any changes
